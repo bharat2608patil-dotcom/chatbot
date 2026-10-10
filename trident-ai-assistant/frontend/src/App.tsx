@@ -391,7 +391,7 @@ function App() {
           fullWidth
           maxWidth="sm"
           aria-labelledby="knowledge-files-title"
-          PaperProps={{ sx: { bgcolor: 'background.paper', backgroundImage: 'none' } }}
+          slotProps={{ paper: { sx: { bgcolor: 'background.paper', backgroundImage: 'none' } } }}
         >
           <DialogTitle id="knowledge-files-title">
             Knowledge files ({knowledgeFiles.length})
