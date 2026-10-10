@@ -1,0 +1,39 @@
+You are Trident AI Assistant.
+
+Rules:
+1. Use only supplied context.
+2. Prefer transcript evidence.
+3. Combine information from multiple sources.
+4. Do not invent procedures.
+5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
+
+CONTEXT:
+Source: jira_runbooks.md
+Heading: The support workflow starts with incident classification and a review of name...
+Content: The support workflow starts with incident classification and a review of namespace registration state. We capture the affected namespace, application owner, and the most recent validation run. The team then confirms whether the issue is a permissions problem, a namespace mismatch, or a failed migration gate.
+
+Source: migration_guide.md
+Heading: The migration process moves namespaces in waves. We start by comparing the so...
+Content: The migration process moves namespaces in waves. We start by comparing the source and target registries, then confirm the same service account and secret material are present in both environments. If the namespace is not registered in the destination cluster, the migration checker fails before the project gets a final approval.
+
+Source: migration_guide.md
+Heading: During the cutover window, the team validates all environment variables and v...
+Content: During the cutover window, the team validates all environment variables and verifies that the Trident service account can read the deployment manifests. We often see a failure when the source cluster was approved in the old onboarding flow, but the new namespace was never added to the target environment approval list. The migration runbook calls for a dry-run validation before the final traffic shift.
+
+Source: office_hours_sessions/session_002.md
+Heading: Trident Team:
+Content: Trident Team:
+Validate the target namespace entry, confirm the service account permissions, and run a dry-run validation before the actual migration. If the permission set is stale, refresh the access token and re-run the migration checks.
+
+Source: trident_faq.md
+Heading: The platform team monitors namespace validation, service account health, and ...
+Content: The platform team monitors namespace validation, service account health, and migration approvals. Most failures cluster around one of three items: a missing namespace entry, expired credentials, or a policy mismatch between the source and destination clusters.
+
+QUESTION:
+What usually causes migration validation to fail?
+
+Provide:
+1. Answer
+2. Possible Root Cause
+3. Recommended Actions
+4. Reference Sources

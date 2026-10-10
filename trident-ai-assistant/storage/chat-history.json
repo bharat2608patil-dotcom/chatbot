@@ -76,5 +76,31 @@
       "migration_guide.md",
       "migration_guide.md"
     ]
+  },
+  {
+    "id": "7dd19964-c9de-49b8-986d-f153f702edd6",
+    "role": "user",
+    "content": "What usually causes migration validation to fail?",
+    "timestamp": "2026-10-10T06:55:56.043Z",
+    "references": [
+      "jira_runbooks.md",
+      "migration_guide.md",
+      "migration_guide.md",
+      "office_hours_sessions/session_002.md",
+      "trident_faq.md"
+    ]
+  },
+  {
+    "id": "8ed741d6-31d0-4412-b388-58da0cfbab20",
+    "role": "assistant",
+    "content": "Namespace validation failures typically occur when the namespace has not yet been registered or approved in the target environment. The validation flow will fail before deployment until the registry entry and permissions are corrected.",
+    "timestamp": "2026-10-10T06:55:56.043Z",
+    "references": [
+      "jira_runbooks.md",
+      "migration_guide.md",
+      "migration_guide.md",
+      "office_hours_sessions/session_002.md",
+      "trident_faq.md"
+    ]
   }
 ]

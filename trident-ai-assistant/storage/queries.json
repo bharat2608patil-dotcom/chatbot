@@ -10,5 +10,9 @@
   {
     "question": "Why is namespace validation failing?",
     "timestamp": "2026-10-10T05:44:52.374Z"
+  },
+  {
+    "question": "What usually causes migration validation to fail?",
+    "timestamp": "2026-10-10T06:55:55.940Z"
   }
 ]

@@ -7,6 +7,7 @@ exports.buildClaudePrompt = buildClaudePrompt;
 exports.parseClaudeResponse = parseClaudeResponse;
 exports.callClaude = callClaude;
 const node_child_process_1 = require("node:child_process");
+const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 function isWindows() {
     return process.platform === 'win32';
@@ -101,6 +102,16 @@ async function callClaude(commandPrompt, timeoutMs = 60000) {
     console.log(`[claude] prompt length: ${prompt.length}`);
     console.log('[claude] exact prompt passed to CLI:');
     console.log(prompt);
+    const promptFile = node_path_1.default.resolve(__dirname, '../../../storage/claude-prompt.txt');
+    try {
+        await node_fs_1.promises.mkdir(node_path_1.default.dirname(promptFile), { recursive: true });
+        await node_fs_1.promises.writeFile(promptFile, prompt, 'utf8');
+        console.log(`[claude] prompt saved to ${promptFile}`);
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(`[claude] could not save prompt file: ${message}`);
+    }
     return new Promise((resolve) => {
         const claudeCommand = isWindows() ? 'claude.cmd' : 'claude';
         console.log(`[claude] starting CLI: ${claudeCommand}`);

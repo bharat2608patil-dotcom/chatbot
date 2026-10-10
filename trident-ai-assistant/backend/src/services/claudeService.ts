@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { ClaudeResponse, ClaudeRequest } from '../types';
 
@@ -104,6 +105,16 @@ export async function callClaude(commandPrompt: ClaudeRequest, timeoutMs = 60000
   console.log(`[claude] prompt length: ${prompt.length}`);
   console.log('[claude] exact prompt passed to CLI:');
   console.log(prompt);
+
+  const promptFile = path.resolve(__dirname, '../../../storage/claude-prompt.txt');
+  try {
+    await fs.mkdir(path.dirname(promptFile), { recursive: true });
+    await fs.writeFile(promptFile, prompt, 'utf8');
+    console.log(`[claude] prompt saved to ${promptFile}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.warn(`[claude] could not save prompt file: ${message}`);
+  }
 
   return new Promise((resolve) => {
     const claudeCommand = isWindows() ? 'claude.cmd' : 'claude';
