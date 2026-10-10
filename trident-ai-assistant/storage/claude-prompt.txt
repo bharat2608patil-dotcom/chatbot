@@ -7,6 +7,7 @@ Rules:
 4. Do not invent procedures.
 5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
 
+
 CONTEXT:
 Source: migration_guide.md
 Heading: During the cutover window, the team validates all environment variables and v...
