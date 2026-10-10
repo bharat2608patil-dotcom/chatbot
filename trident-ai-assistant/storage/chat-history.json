@@ -24,5 +24,57 @@
       "migration_guide.md",
       "migration_guide.md"
     ]
+  },
+  {
+    "id": "d46c6d6c-dac2-4b87-a9e1-b3098e026e8d",
+    "role": "user",
+    "content": "Why is namespace validation failing?",
+    "timestamp": "2026-10-10T05:44:22.908Z",
+    "references": [
+      "jira_runbooks.md",
+      "onboarding.md",
+      "trident_faq.md",
+      "migration_guide.md",
+      "migration_guide.md"
+    ]
+  },
+  {
+    "id": "28ea2d30-da2f-4dde-8505-5d2d6479dc7d",
+    "role": "assistant",
+    "content": "Namespace validation failures typically occur when the namespace has not yet been registered or approved in the target environment. The validation flow will fail before deployment until the registry entry and permissions are corrected.",
+    "timestamp": "2026-10-10T05:44:22.908Z",
+    "references": [
+      "jira_runbooks.md",
+      "onboarding.md",
+      "trident_faq.md",
+      "migration_guide.md",
+      "migration_guide.md"
+    ]
+  },
+  {
+    "id": "55ed01c4-cfe5-4154-8cae-286c1e6aabfd",
+    "role": "user",
+    "content": "Why is namespace validation failing?",
+    "timestamp": "2026-10-10T05:44:52.429Z",
+    "references": [
+      "jira_runbooks.md",
+      "onboarding.md",
+      "trident_faq.md",
+      "migration_guide.md",
+      "migration_guide.md"
+    ]
+  },
+  {
+    "id": "508a91cc-26e8-42b0-9471-f219e4be1037",
+    "role": "assistant",
+    "content": "Namespace validation failures typically occur when the namespace has not yet been registered or approved in the target environment. The validation flow will fail before deployment until the registry entry and permissions are corrected.",
+    "timestamp": "2026-10-10T05:44:52.429Z",
+    "references": [
+      "jira_runbooks.md",
+      "onboarding.md",
+      "trident_faq.md",
+      "migration_guide.md",
+      "migration_guide.md"
+    ]
   }
 ]

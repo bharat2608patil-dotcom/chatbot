@@ -71,37 +71,49 @@ export async function retrieveRelevantChunks(question: string, topN = 5): Promis
     .filter((term) => term.length > 2)
     .slice(0, 12);
 
+  console.log('[retrieval] query terms:', queryTerms);
+
   if (queryTerms.length === 0) {
+    console.warn('[retrieval] no searchable keywords after normalization');
     return { chunks: [] };
   }
 
   const files = collectMarkdownFiles(KNOWLEDGE_ROOT);
+  console.log(`[retrieval] scanning ${files.length} markdown files`);
   const matches: KnowledgeChunk[] = [];
 
   for (const filePath of files) {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const blocks = content
-      .split(/\n\s*\n+/)
-      .map((block) => block.trim())
-      .filter((block) => block.length > 80);
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const blocks = content
+        .split(/\n\s*\n+/)
+        .map((block) => block.trim())
+        .filter((block) => block.length > 80);
 
-    for (const block of blocks) {
-      const score = scoreParagraph(block, queryTerms);
-      if (score <= 0) continue;
+      for (const block of blocks) {
+        const score = scoreParagraph(block, queryTerms);
+        if (score <= 0) continue;
 
-      matches.push({
-        id: `${path.basename(filePath, '.md')}-${matches.length + 1}`,
-        source: getRelativeFromRoot(filePath),
-        heading: buildHeading(filePath, block),
-        content: block,
-        score,
-        fileType: 'md',
-      });
+        matches.push({
+          id: `${path.basename(filePath, '.md')}-${matches.length + 1}`,
+          source: getRelativeFromRoot(filePath),
+          heading: buildHeading(filePath, block),
+          content: block,
+          score,
+          fileType: 'md',
+        });
+      }
+    } catch (error) {
+      console.error(`[retrieval] failed to read ${filePath}`, error);
     }
   }
 
   matches.sort((a, b) => b.score - a.score);
+  console.log(`[retrieval] matched chunks before ranking: ${matches.length}`);
+  const selectedChunks = matches.slice(0, topN);
+  console.log(`[retrieval] selected top ${selectedChunks.length} chunks`);
+
   return {
-    chunks: matches.slice(0, topN),
+    chunks: selectedChunks,
   };
 }

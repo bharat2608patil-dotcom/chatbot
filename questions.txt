@@ -1,0 +1,10 @@
+Why is namespace validation failing?
+What usually causes migration validation to fail?
+Why do we see access denied errors during onboarding?
+What should we check when the Trident service account cannot read project metadata?
+Why is the deployment blocked before application code is even evaluated?
+What are the most common causes of namespace approval issues?
+How do we resolve a failed cutover in the target cluster?
+What does the migration runbook say about stale credentials?
+What is the recommended first step when the namespace is missing from the registry?
+Why is repository access a common incident cause in Trident?

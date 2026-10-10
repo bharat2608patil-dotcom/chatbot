@@ -97,8 +97,11 @@ function buildFallbackClaudeResponse(question, context) {
 }
 async function callClaude(commandPrompt, timeoutMs = 60000) {
     const prompt = buildClaudePrompt(commandPrompt.context, commandPrompt.userQuestion);
-    return new Promise((resolve, reject) => {
+    console.log('[claude] prompt prepared');
+    console.log(`[claude] prompt length: ${prompt.length}`);
+    return new Promise((resolve) => {
         const claudeCommand = isWindows() ? 'claude.cmd' : 'claude';
+        console.log(`[claude] starting CLI: ${claudeCommand}`);
         const child = (0, node_child_process_1.spawn)(claudeCommand, ['-p', prompt], {
             cwd: node_path_1.default.resolve(__dirname, '../../'),
             env: process.env,
@@ -106,6 +109,7 @@ async function callClaude(commandPrompt, timeoutMs = 60000) {
             stdio: ['ignore', 'pipe', 'pipe'],
         });
         const timer = setTimeout(() => {
+            console.warn(`[claude] timeout after ${timeoutMs}ms; using fallback response`);
             child.kill('SIGTERM');
             resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
         }, timeoutMs);
@@ -119,19 +123,25 @@ async function callClaude(commandPrompt, timeoutMs = 60000) {
         });
         child.on('error', (error) => {
             clearTimeout(timer);
+            console.error('[claude] failed to start CLI:', error.message);
             resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
         });
         child.on('close', (code) => {
             clearTimeout(timer);
             if (code !== 0) {
+                console.error(`[claude] CLI exited with code ${code}`);
+                console.error(`[claude] stderr: ${stderr.trim() || 'no stderr output'}`);
                 resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
                 return;
             }
             const raw = stdout.trim();
             if (!raw) {
+                console.warn('[claude] CLI returned empty output; using fallback');
                 resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
                 return;
             }
+            console.log('[claude] CLI output received');
+            console.log(`[claude] raw output preview: ${raw.slice(0, 220)}`);
             resolve(parseClaudeResponse(raw, commandPrompt.context ? ['Knowledge context'] : []));
         });
     });
