@@ -20,6 +20,24 @@ const upload = multer({
   },
 });
 
+async function collectMarkdownFiles(directory: string): Promise<Array<{ absolutePath: string; relativePath: string }>> {
+  const files: Array<{ absolutePath: string; relativePath: string }> = [];
+
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await collectMarkdownFiles(entryPath));
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+      files.push({
+        absolutePath: entryPath,
+        relativePath: path.relative(knowledgeDirectory, entryPath).replace(/\\/g, '/'),
+      });
+    }
+  }
+
+  return files;
+}
+
 const parseUpload: RequestHandler = (request, response, next) => {
   upload.single('file')(request, response, (error: unknown) => {
     if (!error) {
@@ -32,6 +50,69 @@ const parseUpload: RequestHandler = (request, response, next) => {
     response.status(isTooLarge ? 413 : 400).json({ ok: false, message });
   });
 };
+
+router.get('/api/knowledge', async (_request, response) => {
+  try {
+    await fs.mkdir(knowledgeDirectory, { recursive: true });
+    const files = await collectMarkdownFiles(knowledgeDirectory);
+    const details = await Promise.all(files.map(async (file) => {
+      const stat = await fs.stat(file.absolutePath);
+      return {
+        relativePath: file.relativePath,
+        sizeBytes: stat.size,
+        updatedAt: stat.mtime.toISOString(),
+      };
+    }));
+    details.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+    response.json({ files: details });
+  } catch (error) {
+    console.error('[knowledge] failed to list Markdown files:', error);
+    response.status(500).json({ ok: false, message: 'Knowledge files could not be listed.' });
+  }
+});
+
+router.delete('/api/knowledge', async (request, response) => {
+  const requestedPath = typeof request.query.path === 'string' ? request.query.path : '';
+  if (!requestedPath || path.extname(requestedPath).toLowerCase() !== '.md') {
+    response.status(400).json({ ok: false, message: 'Provide a Markdown file path to delete.' });
+    return;
+  }
+
+  const destination = path.resolve(knowledgeDirectory, requestedPath);
+  const relativePath = path.relative(knowledgeDirectory, destination);
+  if (!relativePath || relativePath === '..' || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
+    response.status(400).json({ ok: false, message: 'The requested path is outside the knowledge base.' });
+    return;
+  }
+
+  try {
+    const knowledgeRoot = await fs.realpath(knowledgeDirectory);
+    const actualPath = await fs.realpath(destination);
+    const actualRelativePath = path.relative(knowledgeRoot, actualPath);
+    if (!actualRelativePath || actualRelativePath === '..' || actualRelativePath.startsWith(`..${path.sep}`) || path.isAbsolute(actualRelativePath)) {
+      response.status(400).json({ ok: false, message: 'The requested path is outside the knowledge base.' });
+      return;
+    }
+
+    const stat = await fs.stat(actualPath);
+    if (!stat.isFile() || path.extname(actualPath).toLowerCase() !== '.md') {
+      response.status(400).json({ ok: false, message: 'Only Markdown files can be deleted.' });
+      return;
+    }
+
+    await fs.unlink(actualPath);
+    console.log(`[knowledge] deleted ${relativePath}`);
+    response.json({ ok: true, relativePath });
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      response.status(404).json({ ok: false, message: 'The knowledge file was not found.' });
+      return;
+    }
+
+    console.error('[knowledge] failed to delete Markdown file:', error);
+    response.status(500).json({ ok: false, message: 'The knowledge file could not be deleted.' });
+  }
+});
 
 router.post('/api/knowledge/upload', parseUpload, async (request, response) => {
   const file = request.file;

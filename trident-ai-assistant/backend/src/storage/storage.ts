@@ -46,7 +46,7 @@ export async function appendChatMessage(message: ChatMessage): Promise<void> {
   await fs.writeFile(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
 }
 
-export async function getChatHistory(limit = 20): Promise<ChatMessage[]> {
+export async function getChatHistory(limit = 100): Promise<ChatMessage[]> {
   await ensureFile(HISTORY_FILE, '[]');
   const history = await readJson<ChatMessage[]>(HISTORY_FILE, []);
   return history.slice(-limit);

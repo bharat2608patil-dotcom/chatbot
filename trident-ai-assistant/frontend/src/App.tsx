@@ -6,19 +6,24 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   CssBaseline,
   Divider,
+  IconButton,
   Stack,
   TextField,
   ThemeProvider,
+  Tooltip,
   Typography,
   createTheme,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
-import { sendChatQuestion, uploadKnowledgeFile } from './services/chatApi';
-import type { ChatMessage, ChatResponse } from './types/chat';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import { deleteKnowledgeFile, getKnowledgeFiles, loadChatHistory, sendChatQuestion, uploadKnowledgeFile } from './services/chatApi';
+import type { ChatMessage, ChatResponse, KnowledgeFile } from './types/chat';
 
 const theme = createTheme({
   palette: {
@@ -44,10 +49,14 @@ const starterMessage: ChatMessage = {
 
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([starterMessage]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadingKnowledge, setUploadingKnowledge] = useState(false);
+  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([]);
+  const [knowledgeFilesOpen, setKnowledgeFilesOpen] = useState(false);
+  const [deletingFile, setDeletingFile] = useState('');
   const [uploadFeedback, setUploadFeedback] = useState<{
     severity: 'success' | 'error';
     message: string;
@@ -55,8 +64,49 @@ function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    loadChatHistory()
+      .then((history) => {
+        if (!cancelled) setMessages(history.length > 0 ? history : [starterMessage]);
+      })
+      .catch((historyError: unknown) => {
+        if (!cancelled) {
+          setError(historyError instanceof Error ? historyError.message : 'Unable to load chat history.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  const refreshKnowledgeFiles = async () => {
+    const files = await getKnowledgeFiles();
+    setKnowledgeFiles(files);
+  };
+
+  const handleToggleKnowledgeFiles = async () => {
+    const open = !knowledgeFilesOpen;
+    setKnowledgeFilesOpen(open);
+    if (!open) return;
+
+    setUploadFeedback(null);
+    try {
+      await refreshKnowledgeFiles();
+    } catch (filesError) {
+      setUploadFeedback({
+        severity: 'error',
+        message: filesError instanceof Error ? filesError.message : 'Unable to load knowledge files.',
+      });
+    }
+  };
 
   const handleSend = async () => {
     const trimmed = draft.trim();
@@ -117,6 +167,16 @@ function App() {
         severity: 'success',
         message: `${result.fileName} was added to the knowledge base.`,
       });
+      if (knowledgeFilesOpen) {
+        try {
+          await refreshKnowledgeFiles();
+        } catch (filesError) {
+          setUploadFeedback({
+            severity: 'error',
+            message: `The file was uploaded, but the knowledge file list could not be refreshed: ${filesError instanceof Error ? filesError.message : 'Unknown error.'}`,
+          });
+        }
+      }
     } catch (uploadError) {
       setUploadFeedback({
         severity: 'error',
@@ -124,6 +184,28 @@ function App() {
       });
     } finally {
       setUploadingKnowledge(false);
+    }
+  };
+
+  const handleDeleteKnowledgeFile = async (file: KnowledgeFile) => {
+    if (!window.confirm(`Delete ${file.relativePath} from the knowledge base?`)) return;
+
+    setDeletingFile(file.relativePath);
+    setUploadFeedback(null);
+    try {
+      await deleteKnowledgeFile(file.relativePath);
+      await refreshKnowledgeFiles();
+      setUploadFeedback({
+        severity: 'success',
+        message: `${file.relativePath} was deleted from the knowledge base.`,
+      });
+    } catch (deleteError) {
+      setUploadFeedback({
+        severity: 'error',
+        message: deleteError instanceof Error ? deleteError.message : 'Unable to delete the knowledge file.',
+      });
+    } finally {
+      setDeletingFile('');
     }
   };
 
@@ -185,6 +267,15 @@ function App() {
                   onChange={(event) => void handleKnowledgeUpload(event)}
                 />
               </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                startIcon={<FolderOpenOutlinedIcon />}
+                onClick={() => void handleToggleKnowledgeFiles()}
+              >
+                Knowledge files
+              </Button>
               <Chip label="RAG-enabled" color="primary" variant="outlined" />
             </Stack>
           </Box>
@@ -199,6 +290,49 @@ function App() {
             }}
           >
             <Stack spacing={2}>
+              <Collapse in={knowledgeFilesOpen}>
+                <Card sx={{ bgcolor: '#12212d', boxShadow: 'none' }}>
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      Knowledge files ({knowledgeFiles.length})
+                    </Typography>
+                    {knowledgeFiles.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">No Markdown files found.</Typography>
+                    ) : (
+                      <Stack divider={<Divider flexItem />} spacing={0}>
+                        {knowledgeFiles.map((file) => (
+                          <Box
+                            key={file.relativePath}
+                            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.5 }}
+                          >
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                                {file.relativePath}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {Math.ceil(file.sizeBytes / 1024)} KB · Updated {new Date(file.updatedAt).toLocaleDateString()}
+                              </Typography>
+                            </Box>
+                            <Tooltip title="Delete knowledge file">
+                              <span>
+                                <IconButton
+                                  aria-label={`Delete ${file.relativePath}`}
+                                  color="error"
+                                  size="small"
+                                  disabled={Boolean(deletingFile)}
+                                  onClick={() => void handleDeleteKnowledgeFile(file)}
+                                >
+                                  <DeleteOutlinedIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                  </CardContent>
+                </Card>
+              </Collapse>
               {uploadFeedback && (
                 <Alert severity={uploadFeedback.severity} onClose={() => setUploadFeedback(null)}>
                   {uploadFeedback.message}
@@ -270,7 +404,7 @@ function App() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about onboarding, migration, access, or namespace validation…"
                 variant="outlined"
-                disabled={loading}
+                disabled={loading || historyLoading}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     background: '#0d1c28',
@@ -283,7 +417,7 @@ function App() {
                 color="primary"
                 endIcon={<SendIcon />}
                 onClick={() => void handleSend()}
-                disabled={!draft.trim() || loading}
+                disabled={!draft.trim() || loading || historyLoading}
                 sx={{ minWidth: { xs: '100%', md: 180 }, height: 56 }}
               >
                 Send

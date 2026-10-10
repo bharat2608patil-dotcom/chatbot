@@ -3,9 +3,23 @@ import path from 'node:path';
 import type { KnowledgeChunk, RetrievalResult } from '../types';
 
 const KNOWLEDGE_ROOT = path.resolve(__dirname, '../../../knowledge');
+const STOP_WORDS = new Set([
+  'about', 'after', 'also', 'and', 'are', 'can', 'could', 'does', 'during', 'for', 'from',
+  'how', 'into', 'its', 'our', 'should', 'that', 'the', 'their', 'then', 'there', 'these',
+  'they', 'this', 'through', 'what', 'when', 'where', 'which', 'while', 'with', 'would',
+  'you', 'your',
+]);
+const DEFAULT_CHUNK_LIMIT = 5;
+const MAX_CHUNK_LIMIT = 8;
 
 function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function tokenize(value: string): string[] {
+  return normalize(value)
+    .split(/\s+/)
+    .filter((term) => term.length > 2 && !STOP_WORDS.has(term));
 }
 
 function getRelativeFromRoot(filePath: string): string {
@@ -31,46 +45,106 @@ function collectMarkdownFiles(directory: string): string[] {
   return results;
 }
 
-function scoreParagraph(content: string, queryTerms: string[]): number {
-  const normalized = normalize(content);
-  if (!normalized) {
-    return 0;
+function getChunkLimit(question: string): number {
+  const terms = tokenize(question);
+  const normalizedQuestion = normalize(question);
+  const broadQuestion = /\b(all|across|compare|overview|summari[sz]e|comprehensive|every|entire)\b/i.test(normalizedQuestion);
+
+  if (broadQuestion || terms.length >= 10) {
+    return MAX_CHUNK_LIMIT;
   }
-
-  let score = 0;
-  for (const term of queryTerms) {
-    if (!term) continue;
-    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    const matches = normalized.match(regex);
-    score += matches ? matches.length * 4 : 0;
+  if (terms.length <= 3) {
+    return 3;
   }
-
-  if (normalized.includes('namespace')) score += 10;
-  if (normalized.includes('migration')) score += 8;
-  if (normalized.includes('incident')) score += 8;
-  if (normalized.includes('access')) score += 6;
-  if (normalized.includes('approval')) score += 6;
-
-  return score;
+  return DEFAULT_CHUNK_LIMIT;
 }
 
-function buildHeading(filePath: string, content: string): string {
-  const firstLine = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line.length > 0 && !line.startsWith('#'));
-
-  const fileName = path.basename(filePath, '.md');
-  const cleaned = (firstLine ?? fileName).replace(/\s+/g, ' ').trim();
-  return cleaned.length > 80 ? `${cleaned.slice(0, 77)}...` : cleaned;
+interface CandidateChunk extends KnowledgeChunk {
+  terms: string[];
 }
 
-export async function retrieveRelevantChunks(question: string, topN = 5): Promise<RetrievalResult> {
-  const queryTerms = normalize(question)
-    .split(/\s+/)
-    .filter((term) => term.length > 2)
-    .slice(0, 12);
+function rankChunks(chunks: CandidateChunk[], queryTerms: string[], question: string): CandidateChunk[] {
+  const documentFrequency = new Map<string, number>();
+  for (const chunk of chunks) {
+    for (const term of new Set(chunk.terms)) {
+      documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
+    }
+  }
 
+  const averageLength = chunks.reduce((total, chunk) => total + chunk.terms.length, 0) / Math.max(chunks.length, 1);
+  const normalizedQuestion = normalize(question);
+  const ranked = chunks.map((chunk) => {
+    const frequencies = new Map<string, number>();
+    for (const term of chunk.terms) {
+      frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
+    }
+
+    const headingTerms = new Set(tokenize(chunk.heading));
+    const sourceTerms = new Set(tokenize(path.basename(chunk.source, '.md')));
+    let score = 0;
+    let matchedTerms = 0;
+
+    for (const term of queryTerms) {
+      const frequency = frequencies.get(term) ?? 0;
+      if (frequency === 0) {
+        continue;
+      }
+
+      matchedTerms += 1;
+      const inverseFrequency = Math.log(1 + (chunks.length - (documentFrequency.get(term) ?? 0) + 0.5) / ((documentFrequency.get(term) ?? 0) + 0.5));
+      const lengthRatio = chunk.terms.length / Math.max(averageLength, 1);
+      score += inverseFrequency * ((frequency * 2.2) / (frequency + 1.2 * (0.25 + 0.75 * lengthRatio)));
+      if (headingTerms.has(term)) score += inverseFrequency * 1.5;
+      if (sourceTerms.has(term)) score += inverseFrequency * 1.25;
+    }
+
+    if (matchedTerms > 1 && normalizedQuestion && normalize(chunk.content).includes(normalizedQuestion)) {
+      score += 2;
+    }
+
+    return { ...chunk, score: score + matchedTerms * 0.25 };
+  });
+
+  return ranked.filter((chunk) => chunk.score > 0).sort((left, right) => right.score - left.score);
+}
+
+function selectDiverseChunks(chunks: CandidateChunk[], topN: number): KnowledgeChunk[] {
+  const selected: CandidateChunk[] = [];
+  const deferred: CandidateChunk[] = [];
+  const seenContent = new Set<string>();
+  const sourceCounts = new Map<string, number>();
+
+  for (const chunk of chunks) {
+    const contentKey = normalize(chunk.content);
+    if (seenContent.has(contentKey)) {
+      continue;
+    }
+    seenContent.add(contentKey);
+
+    if ((sourceCounts.get(chunk.source) ?? 0) >= 2) {
+      deferred.push(chunk);
+      continue;
+    }
+
+    selected.push(chunk);
+    sourceCounts.set(chunk.source, (sourceCounts.get(chunk.source) ?? 0) + 1);
+    if (selected.length === topN) {
+      break;
+    }
+  }
+
+  if (selected.length < topN) {
+    for (const chunk of deferred) {
+      selected.push(chunk);
+      if (selected.length === topN) break;
+    }
+  }
+
+  return selected.map(({ terms: _terms, ...chunk }) => chunk);
+}
+
+export async function retrieveRelevantChunks(question: string, topN = getChunkLimit(question)): Promise<RetrievalResult> {
+  const queryTerms = [...new Set(tokenize(question))];
   console.log('[retrieval] query terms:', queryTerms);
 
   if (queryTerms.length === 0) {
@@ -80,7 +154,7 @@ export async function retrieveRelevantChunks(question: string, topN = 5): Promis
 
   const files = collectMarkdownFiles(KNOWLEDGE_ROOT);
   console.log(`[retrieval] scanning ${files.length} markdown files`);
-  const matches: KnowledgeChunk[] = [];
+  const candidates: CandidateChunk[] = [];
 
   for (const filePath of files) {
     try {
@@ -88,19 +162,26 @@ export async function retrieveRelevantChunks(question: string, topN = 5): Promis
       const blocks = content
         .split(/\n\s*\n+/)
         .map((block) => block.trim())
-        .filter((block) => block.length > 80);
+        .filter(Boolean);
+      let currentHeading = path.basename(filePath, '.md');
+      let chunkIndex = 0;
 
       for (const block of blocks) {
-        const score = scoreParagraph(block, queryTerms);
-        if (score <= 0) continue;
+        const headings = [...block.matchAll(/^\s*#{1,6}\s+(.+)$/gm)];
+        if (headings.length > 0) {
+          currentHeading = (headings[headings.length - 1][1] ?? '').trim();
+        }
+        const paragraph = block.replace(/^\s*#{1,6}\s+.+$/gm, '').trim();
+        if (paragraph.length <= 80) continue;
 
-        matches.push({
-          id: `${path.basename(filePath, '.md')}-${matches.length + 1}`,
+        candidates.push({
+          id: `${getRelativeFromRoot(filePath)}-${++chunkIndex}`,
           source: getRelativeFromRoot(filePath),
-          heading: buildHeading(filePath, block),
-          content: block,
-          score,
+          heading: currentHeading,
+          content: paragraph,
+          score: 0,
           fileType: 'md',
+          terms: tokenize(`${currentHeading} ${path.basename(filePath, '.md')} ${paragraph}`),
         });
       }
     } catch (error) {
@@ -108,9 +189,10 @@ export async function retrieveRelevantChunks(question: string, topN = 5): Promis
     }
   }
 
-  matches.sort((a, b) => b.score - a.score);
-  console.log(`[retrieval] matched chunks before ranking: ${matches.length}`);
-  const selectedChunks = matches.slice(0, topN);
+  const rankedChunks = rankChunks(candidates, queryTerms, question);
+  console.log(`[retrieval] matched chunks before ranking: ${rankedChunks.length}`);
+  console.log(`[retrieval] adaptive chunk limit: ${topN}`);
+  const selectedChunks = selectDiverseChunks(rankedChunks, topN);
   console.log(`[retrieval] selected top ${selectedChunks.length} chunks`);
 
   return {

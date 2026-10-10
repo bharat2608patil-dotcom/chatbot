@@ -24,6 +24,22 @@ function cleanSectionValue(value: string): string {
     .trim();
 }
 
+function formatAnswer(answer: string, rootCause: string, actions: string[], references: string[]): string {
+  return [
+    'Answer',
+    answer,
+    '',
+    'Possible Root Cause',
+    rootCause,
+    '',
+    'Recommended Actions',
+    ...actions.map((item, index) => `${index + 1}. ${item}`),
+    '',
+    'Reference Sources',
+    ...references.map((item) => `- ${item}`),
+  ].join('\n');
+}
+
 export function buildClaudePrompt(context: string, question: string): string {
   const template = `You are Trident AI Assistant.
 
@@ -35,6 +51,7 @@ Rules:
 5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
 6. Do not greet the user or say you are ready to help. Start directly with the requested answer format.
 7. Output plain text only. Do not use Markdown headings like ##, bold like **text**, or bullet markers. Use only the required numbered sections.
+8. In Reference Sources, cite only the sources supplied in the context.
 
 CONTEXT:
 ${context}
@@ -80,25 +97,18 @@ export function parseClaudeResponse(raw: string, references: string[] = []): Cla
     .filter(Boolean)
     .slice(0, 10);
 
-  const formattedAnswer = [
-    'Answer',
-    answerText || 'I could not find this information in the available knowledge sources.',
-    '',
-    'Possible Root Cause',
-    rootCause,
-    '',
-    'Recommended Actions',
-    ...recommendedActions.map((item, index) => `${index + 1}. ${item}`),
-    '',
-    'Reference Sources',
-    ...extractedReferences.map((item) => `- ${item}`),
-  ].join('\n');
+  const finalReferences = references.length > 0 ? references : extractedReferences;
 
   return {
-    answer: formattedAnswer,
+    answer: formatAnswer(
+      answerText || 'I could not find this information in the available knowledge sources.',
+      rootCause,
+      recommendedActions,
+      finalReferences,
+    ),
     rootCause,
     recommendedActions,
-    references: extractedReferences.length > 0 ? extractedReferences : references,
+    references: finalReferences,
   };
 }
 
@@ -131,11 +141,12 @@ function buildFallbackClaudeResponse(question: string, context: string): ClaudeR
     rootCause = 'The evidence suggests a registration or permission mismatch rather than an application bug.';
   }
 
+  const references = sourceNames.length > 0 ? sourceNames : ['knowledge/onboarding.md'];
   return {
-    answer,
+    answer: formatAnswer(answer, rootCause, recommendedActions, references),
     rootCause,
     recommendedActions,
-    references: sourceNames.length > 0 ? sourceNames : ['knowledge/onboarding.md'],
+    references,
   };
 }
 
@@ -222,7 +233,7 @@ export async function callClaude(commandPrompt: ClaudeRequest, timeoutMs = 60000
       }
 
       console.log('[claude] response source: Claude CLI stdout');
-      resolve(parseClaudeResponse(raw, commandPrompt.context ? ['Knowledge context'] : []));
+      resolve(parseClaudeResponse(raw, commandPrompt.references ?? []));
     });
   });
 }

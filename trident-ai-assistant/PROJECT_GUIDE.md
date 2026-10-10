@@ -136,7 +136,7 @@ When a user submits a question, the application performs these steps:
 4. **Backend validates and trims the text.** `chat.ts` rejects an empty question with HTTP 400.
 5. **Backend saves the query.** The question and timestamp are appended to `storage/queries.json`.
 6. **Retrieval scans Markdown.** The retrieval service recursively scans `.md` files under `knowledge/`, splits the documents into paragraph-like blocks, and ignores blocks shorter than 81 characters.
-7. **Retrieval ranks candidate blocks.** It normalizes the question and document text, scores query-term matches, adds extra weights for terms such as `namespace`, `migration`, `incident`, `access`, and `approval`, sorts by score, and selects up to five blocks.
+7. **Retrieval ranks candidate blocks.** It tokenizes the question and document text, ranks with term frequency and inverse document frequency, gives extra weight to matching headings and filenames, favors diverse sources, and selects up to eight blocks according to question breadth (three for short/narrow questions and five by default).
 8. **Backend builds the context.** Each selected block is included with its source path and heading. If nothing matches, the context says that no relevant source material was found.
 9. **Claude prompt is built.** `claudeService.ts` combines the assistant rules, selected context, user question, and the requested four-section answer format.
 10. **Prompt is saved.** The full prompt overwrites `storage/claude-prompt.txt`. This file contains the latest request only, not a history of prompts.
@@ -150,10 +150,10 @@ When a user submits a question, the application performs these steps:
 
 Retrieval is a simple keyword-based method, not a vector database or semantic embedding search. It examines the local Markdown files and passes the selected paragraph contents to Claude. Claude does not have to discover the knowledge files to answer from those supplied excerpts.
 
-The backend selects at most five paragraphs. Therefore:
+The backend selects at most eight paragraphs. The default is five, with fewer for short/narrow questions and more for broad questions. Retrieval uses local keyword ranking; it does not use embeddings or semantic search. Selected references include the source path and section heading.
 
 - The complete knowledge base is not placed into each prompt.
-- A relevant paragraph can be missed if it does not score highly for the question's words or the built-in weighted terms.
+- A relevant paragraph can be missed if it does not score highly for the question's words, heading, or filename.
 - Adding or editing `.md` files under `knowledge/` changes future retrieval without a separate indexing step.
 - The selected source paths and paragraph content are printed in the backend logs.
 
@@ -202,7 +202,7 @@ Logs and `claude-prompt.txt` contain user questions and retrieved knowledge text
 - `storage/chat-history.json`: Array of user and assistant messages, timestamps, and references.
 - `storage/claude-prompt.txt`: The latest full prompt. It is overwritten on the next request.
 
-These files are local JSON/text storage, not a database. The current chat screen starts with a fixed welcome message; the code does not currently load persisted chat history into the frontend on startup.
+These files are local JSON/text storage, not a database. On startup, the chat screen loads the most recent 100 persisted messages; if there is no saved history, it displays the welcome message.
 
 ## 9. API Endpoints
 
@@ -229,6 +229,18 @@ Successful response fields:
 - `timestamp`: Response timestamp.
 
 An empty question returns HTTP 400. An unexpected server error returns HTTP 500 with a message.
+
+### `GET /api/chat/history?limit=100`
+
+Returns the most recent saved chat messages, up to a maximum of 100, in chronological order.
+
+### `GET /api/knowledge`
+
+Returns Markdown file paths, sizes, and last-updated timestamps under `knowledge/`.
+
+### `DELETE /api/knowledge?path=<relative-path>`
+
+Deletes the specified Markdown file under `knowledge/`. Paths outside the knowledge directory are rejected. A missing file returns HTTP 404.
 
 ### `POST /api/knowledge/upload`
 
@@ -274,8 +286,9 @@ The backend defaults to port `4000`; set `PORT` to use a different backend port.
 
 ## 11. Current Limitations and Safety Notes
 
-- Retrieval is keyword scoring over paragraph blocks; it is not semantic/vector search.
-- The maximum retrieved context is five blocks per question.
+- Retrieval uses local lexical scoring over paragraph blocks; it is not semantic/vector search.
+- The adaptive retrieval limit is at most eight blocks per question.
+- Chat history is one local conversation transcript; there are not yet separate named conversations or per-chat deletion.
 - Data is stored in local JSON files; there is no database, multi-user identity, or access-control layer in the current implementation.
 - Prompt snapshots and backend logs include submitted questions and retrieved source content.
 - The development servers bind to network interfaces for access from other devices. The API currently has no authentication. Use only on a trusted network and do not expose it directly to the public internet without adding authentication, authorization, and appropriate data protections.

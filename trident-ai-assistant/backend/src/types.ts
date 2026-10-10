@@ -41,6 +41,7 @@ export interface ClaudeRequest {
   systemPrompt: string;
   userQuestion: string;
   context: string;
+  references?: string[];
 }
 
 export interface ClaudeResponse {

@@ -19,3 +19,9 @@ export interface ChatResponse {
   references: string[];
   timestamp: string;
 }
+
+export interface KnowledgeFile {
+  relativePath: string;
+  sizeBytes: number;
+  updatedAt: string;
+}
