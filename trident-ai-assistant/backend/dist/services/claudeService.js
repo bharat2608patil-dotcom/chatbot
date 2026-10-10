@@ -27,6 +27,21 @@ function cleanSectionValue(value) {
         .replace(/\s+\*\*$/g, '')
         .trim();
 }
+function formatAnswer(answer, rootCause, actions, references) {
+    return [
+        'Answer',
+        answer,
+        '',
+        'Possible Root Cause',
+        rootCause,
+        '',
+        'Recommended Actions',
+        ...actions.map((item, index) => `${index + 1}. ${item}`),
+        '',
+        'Reference Sources',
+        ...references.map((item) => `- ${item}`),
+    ].join('\n');
+}
 function buildClaudePrompt(context, question) {
     const template = `You are Trident AI Assistant.
 
@@ -38,6 +53,7 @@ Rules:
 5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
 6. Do not greet the user or say you are ready to help. Start directly with the requested answer format.
 7. Output plain text only. Do not use Markdown headings like ##, bold like **text**, or bullet markers. Use only the required numbered sections.
+8. In Reference Sources, cite only the sources supplied in the context.
 
 CONTEXT:
 ${context}
@@ -74,60 +90,12 @@ function parseClaudeResponse(raw, references = []) {
         .map((value) => value.replace(/^[-*\s]+/, '').trim())
         .filter(Boolean)
         .slice(0, 10);
-    const formattedAnswer = [
-        'Answer',
-        answerText || 'I could not find this information in the available knowledge sources.',
-        '',
-        'Possible Root Cause',
-        rootCause,
-        '',
-        'Recommended Actions',
-        ...recommendedActions.map((item, index) => `${index + 1}. ${item}`),
-        '',
-        'Reference Sources',
-        ...extractedReferences.map((item) => `- ${item}`),
-    ].join('\n');
+    const finalReferences = references.length > 0 ? references : extractedReferences;
     return {
-        answer: formattedAnswer,
+        answer: formatAnswer(answerText || 'I could not find this information in the available knowledge sources.', rootCause, recommendedActions, finalReferences),
         rootCause,
         recommendedActions,
-        references: extractedReferences.length > 0 ? extractedReferences : references,
-    };
-}
-function buildFallbackClaudeResponse(question, context) {
-    const normalizedQuestion = question.toLowerCase();
-    const sourceNames = context
-        .split(/\n+/)
-        .filter((line) => line.includes('Source:'))
-        .map((line) => line.replace(/^Source:\s*/i, '').trim())
-        .filter(Boolean);
-    let answer = 'I could not find this information in the available knowledge sources.';
-    let rootCause = 'The issue cannot be confidently established from the current context.';
-    const recommendedActions = ['Review the validation status for the namespace in the target environment.', 'Confirm the service account permissions and token validity.'];
-    if (normalizedQuestion.includes('namespace') || normalizedQuestion.includes('validation')) {
-        answer = 'Namespace validation failures typically occur when the namespace has not yet been registered or approved in the target environment. The validation flow will fail before deployment until the registry entry and permissions are corrected.';
-        rootCause = 'The namespace is either unregistered, missing from the approval list, or blocked by stale access credentials.';
-        recommendedActions.splice(0, 2, 'Verify namespace registration and approval status.', 'Re-run validation after restoring the service account permissions.');
-    }
-    else if (normalizedQuestion.includes('migration') || normalizedQuestion.includes('cutover')) {
-        answer = 'Migration issues are usually caused by a missing destination-cluster registration or stale credentials during the validation gate.';
-        rootCause = 'The active migration environment is missing a valid approval record or the service account no longer has the required access.';
-        recommendedActions.splice(0, 2, 'Check the target environment approval record before the cutover window.', 'Validate the service account and re-run the migration dry-run check.');
-    }
-    else if (normalizedQuestion.includes('access') || normalizedQuestion.includes('permission')) {
-        answer = 'Access issues are commonly caused by missing repository permissions or a stale service account secret. The validation checks fail until the authorization state is corrected.';
-        rootCause = 'The service account or repository access token is missing from the current environment.';
-        recommendedActions.splice(0, 2, 'Confirm repository access for the Trident service account.', 'Rotate or refresh the service account secret and re-run validation.');
-    }
-    else if (context && context.length > 0) {
-        answer = 'The current knowledge base points to registry approval, permission validation, and service account health as the most likely cause. The recommended next step is to confirm the namespace state before changing application logic.';
-        rootCause = 'The evidence suggests a registration or permission mismatch rather than an application bug.';
-    }
-    return {
-        answer,
-        rootCause,
-        recommendedActions,
-        references: sourceNames.length > 0 ? sourceNames : ['knowledge/onboarding.md'],
+        references: finalReferences,
     };
 }
 async function callClaude(commandPrompt, timeoutMs = 60000) {
@@ -146,7 +114,7 @@ async function callClaude(commandPrompt, timeoutMs = 60000) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         console.warn(`[claude] could not save prompt file: ${message}`);
     }
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const claudeCommand = isWindows() ? 'claude.cmd' : 'claude';
         console.log(`[claude] starting CLI: ${claudeCommand}`);
         const cliInstruction = 'Answer the Trident support request supplied through stdin. Do not greet the user; follow its requested response format.';
@@ -159,17 +127,32 @@ async function callClaude(commandPrompt, timeoutMs = 60000) {
             shell: isWindows(),
             stdio: ['pipe', 'pipe', 'pipe'],
         });
-        child.stdin.end(prompt, 'utf8');
-        const timer = setTimeout(() => {
-            console.warn(`[claude] timeout after ${timeoutMs}ms; using fallback response`);
-            console.log(`[claude] partial CLI stdout before timeout (${stdout.length} characters):`);
-            console.log(`--- CLI STDOUT BEGIN ---\n${stdout}\n--- CLI STDOUT END ---`);
-            console.warn('[claude] response source: local fallback (CLI timed out)');
-            child.kill('SIGTERM');
-            resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
-        }, timeoutMs);
         let stdout = '';
         let stderr = '';
+        let settled = false;
+        let timer;
+        const fail = (message) => {
+            if (settled)
+                return;
+            settled = true;
+            clearTimeout(timer);
+            reject(new Error(message));
+        };
+        const succeed = (response) => {
+            if (settled)
+                return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(response);
+        };
+        timer = setTimeout(() => {
+            console.warn(`[claude] timeout after ${timeoutMs}ms`);
+            console.log(`[claude] partial CLI stdout before timeout (${stdout.length} characters):`);
+            console.log(`--- CLI STDOUT BEGIN ---\n${stdout}\n--- CLI STDOUT END ---`);
+            console.error('[claude] response unavailable: CLI timed out');
+            child.kill('SIGTERM');
+            fail('Claude Code CLI timed out. Please try again.');
+        }, timeoutMs);
         child.stdout.on('data', (chunk) => {
             stdout += chunk.toString();
         });
@@ -177,32 +160,34 @@ async function callClaude(commandPrompt, timeoutMs = 60000) {
             stderr += chunk.toString();
         });
         child.on('error', (error) => {
-            clearTimeout(timer);
             console.error('[claude] failed to start CLI:', error.message);
-            console.error('[claude] response source: local fallback (CLI failed to start)');
-            resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
+            console.error('[claude] response unavailable: CLI failed to start');
+            fail('Claude Code CLI could not be started. Check that it is installed and available to the backend.');
         });
+        child.stdin.on('error', (error) => {
+            console.error('[claude] failed to send prompt to CLI:', error.message);
+            fail('The prompt could not be sent to Claude Code CLI. Please try again.');
+        });
+        child.stdin.end(prompt, 'utf8');
         child.on('close', (code) => {
-            clearTimeout(timer);
             console.log(`[claude] CLI process closed with exit code: ${code}`);
             console.log(`[claude] raw CLI stdout (${stdout.length} characters):`);
             console.log(`--- CLI STDOUT BEGIN ---\n${stdout}\n--- CLI STDOUT END ---`);
             if (code !== 0) {
                 console.error(`[claude] CLI exited with code ${code}`);
                 console.error(`[claude] stderr: ${stderr.trim() || 'no stderr output'}`);
-                console.error('[claude] response source: local fallback (CLI exited unsuccessfully)');
-                resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
+                console.error('[claude] response unavailable: CLI exited unsuccessfully');
+                fail(`Claude Code CLI exited unsuccessfully${stderr.trim() ? `: ${stderr.trim()}` : '.'}`);
                 return;
             }
             const raw = stdout.trim();
             if (!raw) {
-                console.warn('[claude] CLI returned empty output; using fallback');
-                console.warn('[claude] response source: local fallback (CLI stdout was empty)');
-                resolve(buildFallbackClaudeResponse(commandPrompt.userQuestion, commandPrompt.context));
+                console.warn('[claude] CLI returned empty output');
+                fail('Claude Code CLI returned an empty response. Please try again.');
                 return;
             }
             console.log('[claude] response source: Claude CLI stdout');
-            resolve(parseClaudeResponse(raw, commandPrompt.context ? ['Knowledge context'] : []));
+            succeed(parseClaudeResponse(raw, commandPrompt.references ?? []));
         });
     });
 }

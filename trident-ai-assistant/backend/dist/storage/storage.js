@@ -49,7 +49,7 @@ async function appendChatMessage(message) {
     history.push(message);
     await node_fs_1.promises.writeFile(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
 }
-async function getChatHistory(limit = 20) {
+async function getChatHistory(limit = 100) {
     await ensureFile(HISTORY_FILE, '[]');
     const history = await readJson(HISTORY_FILE, []);
     return history.slice(-limit);

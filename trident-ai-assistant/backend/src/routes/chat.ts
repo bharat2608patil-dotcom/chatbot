@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { appendChatMessage, appendQuery, getChatHistory } from '../storage/storage';
 import { retrieveRelevantChunks } from '../retrieval/retrievalService';
 import { callClaude } from '../services/claudeService';
-import type { ChatRequest, ChatResponse } from '../types';
+import type { ChatRequest, ChatResponse, ClaudeResponse } from '../types';
 
 const router = Router();
 
@@ -77,18 +77,75 @@ router.post('/api/chat', async (req, res) => {
 
     const context = contextBlocks.length > 0 ? contextBlocks.join('\n\n') : 'No relevant source material was found in the local knowledge base.';
     const references = [...new Set(retrieved.chunks.map((chunk) => `${chunk.source} — ${chunk.heading}`))];
+
+    if (retrieved.chunks.length === 0) {
+      const answer = [
+        'Answer',
+        'I could not find relevant information in the available knowledge sources to answer this question.',
+        '',
+        'Possible Root Cause',
+        'A root cause cannot be established because no relevant source passages were found.',
+        '',
+        'Recommended Actions',
+        '1. Try rephrasing the question using terms from the knowledge base.',
+        '2. Add or upload a relevant .md or .txt knowledge file, then ask again.',
+        '',
+        'Reference Sources',
+      ].join('\n');
+      const timestamp = new Date().toISOString();
+      const response: ChatResponse = {
+        answer,
+        rootCause: 'A root cause cannot be established because no relevant source passages were found.',
+        recommendedActions: [
+          'Try rephrasing the question using terms from the knowledge base.',
+          'Add or upload a relevant .md or .txt knowledge file, then ask again.',
+        ],
+        references: [],
+        timestamp,
+      };
+
+      await appendChatMessage({
+        id: randomUUID(),
+        role: 'user',
+        content: cleanQuestion,
+        timestamp,
+        references: [],
+      });
+      await appendChatMessage({
+        id: randomUUID(),
+        role: 'assistant',
+        content: answer,
+        timestamp,
+        references: [],
+      });
+
+      res.json(response);
+      return;
+    }
+
     console.log(`[chat] context built. length=${context.length}`);
     console.log('[chat] exact question and knowledge context passed to Claude:');
     console.log(`[chat] question: ${cleanQuestion}`);
     console.log(`[chat] context:\n${context}`);
 
     console.log('[chat] calling Claude CLI with retrieved context');
-    const claudeResult = await callClaude({
-      systemPrompt: 'You are Trident AI Assistant.',
-      userQuestion: cleanQuestion,
-      context,
-      references,
-    });
+    let claudeResult: ClaudeResponse;
+    try {
+      claudeResult = await callClaude({
+        systemPrompt: 'You are Trident AI Assistant.',
+        userQuestion: cleanQuestion,
+        context,
+        references,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Claude Code CLI failed unexpectedly.';
+      console.error('[chat] answer generation failed:', error);
+      res.status(503).json({
+        ok: false,
+        message: `${message} No generated answer was saved to chat history.`,
+      });
+      return;
+    }
     console.log('[chat] Claude response received');
     console.log(`[chat] Claude answer: ${claudeResult.answer.slice(0, 220)}`);
 

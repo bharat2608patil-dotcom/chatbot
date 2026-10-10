@@ -63,7 +63,7 @@ Other folders under `backend/src` and `frontend/src` contain supporting modules,
 - `backend/src/routes/chat.ts`: Validates the request, saves the query, runs retrieval, calls Claude, records messages, and returns the API response.
 - `backend/src/routes/knowledge.ts`: Accepts Markdown and plain-text transcript uploads, lists supported knowledge files, and deletes selected files under `knowledge/`.
 - `backend/src/retrieval/retrievalService.ts`: Finds and ranks paragraphs from Markdown and plain-text knowledge files.
-- `backend/src/services/claudeService.ts`: Builds and saves the prompt, invokes Claude Code CLI, logs its output, parses the response, and provides a local fallback when the CLI fails.
+- `backend/src/services/claudeService.ts`: Builds and saves the prompt, invokes Claude Code CLI, logs its output, parses the response, and reports CLI failures without generating a fallback answer.
 - `backend/src/storage/storage.ts`: Reads and writes query and chat-history JSON files.
 - `backend/src/types.ts`: Backend request, response, retrieval, and message types.
 
@@ -200,7 +200,7 @@ Look for log markers such as:
 --- CLI STDOUT END ---
 ```
 
-If the raw stdout contains “I’m ready to help,” that text came from the Claude CLI. It is not one of the backend's fallback answers. If the response-source log says `local fallback`, the app generated the response locally because the CLI failed, timed out, exited unsuccessfully, or returned empty output.
+If the raw stdout contains “I’m ready to help,” that text came from the Claude CLI. The backend no longer generates a generic answer when the CLI fails; it returns an error to the chat UI and does not save a generated assistant answer to chat history.
 
 Logs and `claude-prompt.txt` contain user questions and retrieved knowledge text. Do not share them publicly if the data is private or confidential.
 
@@ -236,7 +236,7 @@ Successful response fields:
 - `references`: Source references.
 - `timestamp`: Response timestamp.
 
-An empty question returns HTTP 400. An unexpected server error returns HTTP 500 with a message.
+An empty question returns HTTP 400. Claude CLI generation failures return HTTP 503 with an error message. Other unexpected server errors return HTTP 500 with a message.
 
 ### `GET /api/chat/history?limit=100`
 
@@ -266,13 +266,13 @@ Successful uploads return HTTP 201 with `ok`, `message`, `fileName`, and `sizeBy
 
 Check the backend's delimited raw stdout. If the phrase is between `CLI STDOUT BEGIN` and `CLI STDOUT END` and the source is `Claude CLI stdout`, Claude Code emitted it. Confirm the backend is running the latest code, the saved prompt contains the current question and relevant excerpts, and the CLI is authenticated as expected. The prompt explicitly asks Claude not to greet and to follow the four-section format.
 
-### The answer is a local generic response
+### Claude Code CLI did not return an answer
 
-Find the `response source: local fallback` message immediately before the response. Check the nearby timeout, launch error, exit code, stderr, or empty-output log to see why the CLI was not used successfully.
+The chat UI displays the CLI failure message. Check the backend logs for a timeout, launch/input error, nonzero exit code, stderr, or empty-output message. The failed generated response is not stored in chat history.
 
 ### No relevant chunks were retrieved
 
-Look for `scanning ... knowledge files`, `no relevant knowledge chunks found`, and `selected top ... chunks`. Confirm the files are `.md` or `.txt` files under the repository's `knowledge/` directory and that their content contains concepts or terms related to the question. A `.txt` file at the project root is not retrieved; upload it through the app or move it into `knowledge/`.
+Look for `scanning ... knowledge files`, `no relevant knowledge chunks found`, and `selected top ... chunks`. Confirm the files are `.md` or `.txt` files under the repository's `knowledge/` directory and that their content contains concepts or terms related to the question. A `.txt` file at the project root is not retrieved; upload it through the app or move it into `knowledge/`. If no chunks match, the app returns an explicit not-enough-information response without calling Claude.
 
 ### The prompt file did not change
 
