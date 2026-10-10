@@ -1,0 +1,11 @@
+Sample Video Transcript - Trident Namespace Onboarding
+
+[00:00:00] Narrator: This training video explains the checks required before a new Trident namespace can pass onboarding validation.
+
+[00:00:12] Platform Engineer: First, make sure the namespace is registered and approved in the Trident registry. The cluster identity also needs to be on the onboarding pipeline's allowlist.
+
+[00:00:27] Narrator: Next, verify that the Trident service account has read and write access to the project metadata. Missing permissions can cause an access denied error during validation.
+
+[00:00:42] Platform Engineer: After correcting a missing registry entry or permission, run the validation workflow again. Do not schedule a production cutover until the namespace is approved.
+
+[00:00:55] Narrator: If validation still fails, capture the namespace, the validation error, and the latest run details so the platform team can investigate.

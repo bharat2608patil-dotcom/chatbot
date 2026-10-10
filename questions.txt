@@ -8,3 +8,5 @@ How do we resolve a failed cutover in the target cluster?
 What does the migration runbook say about stale credentials?
 What is the recommended first step when the namespace is missing from the registry?
 Why is repository access a common incident cause in Trident?
+
+What steps should I follow to get a new Trident namespace through onboarding validation?
