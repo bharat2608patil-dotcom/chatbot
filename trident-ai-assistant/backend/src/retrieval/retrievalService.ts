@@ -26,18 +26,18 @@ function getRelativeFromRoot(filePath: string): string {
   return path.relative(KNOWLEDGE_ROOT, filePath).replace(/\\/g, '/');
 }
 
-function collectMarkdownFiles(directory: string): string[] {
+function collectKnowledgeFiles(directory: string): string[] {
   const results: string[] = [];
 
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const entryPath = path.join(directory, entry.name);
 
     if (entry.isDirectory()) {
-      results.push(...collectMarkdownFiles(entryPath));
+      results.push(...collectKnowledgeFiles(entryPath));
       continue;
     }
 
-    if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+    if (entry.isFile() && ['.md', '.txt'].includes(path.extname(entry.name).toLowerCase())) {
       results.push(entryPath);
     }
   }
@@ -80,7 +80,7 @@ function rankChunks(chunks: CandidateChunk[], queryTerms: string[], question: st
     }
 
     const headingTerms = new Set(tokenize(chunk.heading));
-    const sourceTerms = new Set(tokenize(path.basename(chunk.source, '.md')));
+    const sourceTerms = new Set(tokenize(path.parse(chunk.source).name));
     let score = 0;
     let matchedTerms = 0;
 
@@ -152,18 +152,20 @@ export async function retrieveRelevantChunks(question: string, topN = getChunkLi
     return { chunks: [] };
   }
 
-  const files = collectMarkdownFiles(KNOWLEDGE_ROOT);
-  console.log(`[retrieval] scanning ${files.length} markdown files`);
+  const files = collectKnowledgeFiles(KNOWLEDGE_ROOT);
+  console.log(`[retrieval] scanning ${files.length} knowledge files`);
   const candidates: CandidateChunk[] = [];
 
   for (const filePath of files) {
     try {
       const content = fs.readFileSync(filePath, 'utf8');
+      const extension = path.extname(filePath).toLowerCase();
+      const fileType = extension === '.txt' ? 'transcript' : 'md';
       const blocks = content
         .split(/\n\s*\n+/)
         .map((block) => block.trim())
         .filter(Boolean);
-      let currentHeading = path.basename(filePath, '.md');
+      let currentHeading = path.parse(filePath).name;
       let chunkIndex = 0;
 
       for (const block of blocks) {
@@ -180,8 +182,8 @@ export async function retrieveRelevantChunks(question: string, topN = getChunkLi
           heading: currentHeading,
           content: paragraph,
           score: 0,
-          fileType: 'md',
-          terms: tokenize(`${currentHeading} ${path.basename(filePath, '.md')} ${paragraph}`),
+          fileType,
+          terms: tokenize(`${currentHeading} ${path.parse(filePath).name} ${paragraph}`),
         });
       }
     } catch (error) {

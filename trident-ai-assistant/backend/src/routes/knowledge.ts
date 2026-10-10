@@ -12,22 +12,23 @@ const upload = multer({
     files: 1,
   },
   fileFilter: (_request, file, callback) => {
-    if (path.extname(file.originalname).toLowerCase() !== '.md') {
-      callback(new Error('Only Markdown (.md) files are supported right now.'));
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (extension !== '.md' && extension !== '.txt') {
+      callback(new Error('Only Markdown (.md) and plain-text transcript (.txt) files are supported.'));
       return;
     }
     callback(null, true);
   },
 });
 
-async function collectMarkdownFiles(directory: string): Promise<Array<{ absolutePath: string; relativePath: string }>> {
+async function collectKnowledgeFiles(directory: string): Promise<Array<{ absolutePath: string; relativePath: string }>> {
   const files: Array<{ absolutePath: string; relativePath: string }> = [];
 
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      files.push(...await collectMarkdownFiles(entryPath));
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+      files.push(...await collectKnowledgeFiles(entryPath));
+    } else if (entry.isFile() && ['.md', '.txt'].includes(path.extname(entry.name).toLowerCase())) {
       files.push({
         absolutePath: entryPath,
         relativePath: path.relative(knowledgeDirectory, entryPath).replace(/\\/g, '/'),
@@ -54,7 +55,7 @@ const parseUpload: RequestHandler = (request, response, next) => {
 router.get('/api/knowledge', async (_request, response) => {
   try {
     await fs.mkdir(knowledgeDirectory, { recursive: true });
-    const files = await collectMarkdownFiles(knowledgeDirectory);
+    const files = await collectKnowledgeFiles(knowledgeDirectory);
     const details = await Promise.all(files.map(async (file) => {
       const stat = await fs.stat(file.absolutePath);
       return {
@@ -73,8 +74,8 @@ router.get('/api/knowledge', async (_request, response) => {
 
 router.delete('/api/knowledge', async (request, response) => {
   const requestedPath = typeof request.query.path === 'string' ? request.query.path : '';
-  if (!requestedPath || path.extname(requestedPath).toLowerCase() !== '.md') {
-    response.status(400).json({ ok: false, message: 'Provide a Markdown file path to delete.' });
+  if (!requestedPath || !['.md', '.txt'].includes(path.extname(requestedPath).toLowerCase())) {
+    response.status(400).json({ ok: false, message: 'Provide a Markdown or transcript text file path to delete.' });
     return;
   }
 
@@ -95,8 +96,8 @@ router.delete('/api/knowledge', async (request, response) => {
     }
 
     const stat = await fs.stat(actualPath);
-    if (!stat.isFile() || path.extname(actualPath).toLowerCase() !== '.md') {
-      response.status(400).json({ ok: false, message: 'Only Markdown files can be deleted.' });
+    if (!stat.isFile() || !['.md', '.txt'].includes(path.extname(actualPath).toLowerCase())) {
+      response.status(400).json({ ok: false, message: 'Only Markdown and transcript text files can be deleted.' });
       return;
     }
 
@@ -117,26 +118,27 @@ router.delete('/api/knowledge', async (request, response) => {
 router.post('/api/knowledge/upload', parseUpload, async (request, response) => {
   const file = request.file;
   if (!file) {
-    response.status(400).json({ ok: false, message: 'Choose a Markdown file to upload.' });
+    response.status(400).json({ ok: false, message: 'Choose a Markdown or plain-text transcript file to upload.' });
     return;
   }
 
-  let markdown: string;
+  let text: string;
   try {
-    markdown = new TextDecoder('utf-8', { fatal: true }).decode(file.buffer);
+    text = new TextDecoder('utf-8', { fatal: true }).decode(file.buffer);
   } catch {
-    response.status(400).json({ ok: false, message: 'The Markdown file must use UTF-8 encoding.' });
+    response.status(400).json({ ok: false, message: 'The knowledge file must use UTF-8 encoding.' });
     return;
   }
 
-  if (!markdown.trim() || markdown.includes('\0')) {
-    response.status(400).json({ ok: false, message: 'The Markdown file must contain readable text.' });
+  if (!text.trim() || text.includes('\0')) {
+    response.status(400).json({ ok: false, message: 'The knowledge file must contain readable text.' });
     return;
   }
 
   const originalName = path.basename(file.originalname.replace(/\\/g, '/'));
+  const extension = path.extname(originalName).toLowerCase();
   const baseName = originalName
-    .replace(/\.md$/i, '')
+    .slice(0, -extension.length)
     .replace(/[^a-zA-Z0-9_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 100);
@@ -146,7 +148,7 @@ router.post('/api/knowledge/upload', parseUpload, async (request, response) => {
     return;
   }
 
-  const fileName = `${baseName}.md`;
+  const fileName = `${baseName}${extension}`;
   const destination = path.join(knowledgeDirectory, fileName);
 
   try {
@@ -161,7 +163,7 @@ router.post('/api/knowledge/upload', parseUpload, async (request, response) => {
       return;
     }
 
-    console.error('[knowledge] failed to save uploaded Markdown file:', error);
+    console.error('[knowledge] failed to save uploaded knowledge file:', error);
     response.status(500).json({ ok: false, message: 'The knowledge file could not be saved.' });
     return;
   }

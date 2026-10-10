@@ -262,11 +262,11 @@ function App() {
                 startIcon={<CloudUploadOutlinedIcon />}
                 disabled={uploadingKnowledge}
               >
-                {uploadingKnowledge ? 'Uploading…' : 'Upload .md'}
+                {uploadingKnowledge ? 'Uploading…' : 'Upload knowledge'}
                 <input
                   hidden
                   type="file"
-                  accept=".md,text/markdown"
+                  accept=".md,.txt,text/markdown,text/plain"
                   onChange={(event) => void handleKnowledgeUpload(event)}
                 />
               </Button>
