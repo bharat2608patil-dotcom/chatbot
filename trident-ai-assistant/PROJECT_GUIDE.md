@@ -1,16 +1,16 @@
 # Trident AI Assistant Project Guide
 
-This guide describes the current project: what each part does, how to start it, what happens after a user submits a question, where the prompt and chat data are stored, and how to diagnose common problems.
+This guide describes the current project: what each part does, how to start it, what happens after a user submits a question, which knowledge formats are supported, where the prompt and chat data are stored, and how to diagnose common problems.
 
 ## 1. What the Application Does
 
-Trident AI Assistant is a local knowledge-base chat application. A user asks a question in the web interface. The server searches Markdown documents under `knowledge/`, selects relevant paragraphs, builds a prompt containing those paragraphs and the question, saves that prompt, and sends it to Claude Code CLI. The server then returns the result to the web interface and records the conversation locally.
+Trident AI Assistant is a local knowledge-base chat application. A user asks a question in the web interface. The server searches Markdown and plain-text transcript files under `knowledge/`, selects relevant paragraphs, builds a prompt containing those paragraphs and the question, saves that prompt, and sends it to Claude Code CLI. The server then returns the result to the web interface and records the conversation locally.
 
 The main parts are:
 
 - **Frontend:** React, TypeScript, Vite, and Material UI chat interface.
 - **Backend:** Express and TypeScript API, retrieval, storage, and Claude CLI integration.
-- **Knowledge base:** Markdown documents searched by the backend.
+- **Knowledge base:** Markdown (`.md`) documents and plain-text (`.txt`) transcripts searched by the backend.
 - **Local storage:** JSON query and chat-history files, plus the latest generated Claude prompt.
 - **Claude:** Claude Code CLI invoked in non-interactive print mode. This is a CLI integration, not a direct Anthropic API integration.
 
@@ -19,6 +19,8 @@ The main parts are:
 ```text
 trident-ai-assistant/
 |-- PROJECT_GUIDE.md
+|-- CHATBOT_TEST_CASES.md
+|-- VIDEO_TRANSCRIPT_TEST.txt
 |-- backend/
 |   |-- package.json
 |   |-- tsconfig.json
@@ -42,7 +44,8 @@ trident-ai-assistant/
 |   |-- migration_guide.md
 |   |-- onboarding.md
 |   |-- trident_faq.md
-|   `-- office_hours_sessions/
+|   |-- office_hours_sessions/
+|   `-- <uploaded .md and .txt files>
 `-- storage/
     |-- queries.json
     |-- chat-history.json
@@ -58,8 +61,8 @@ Other folders under `backend/src` and `frontend/src` contain supporting modules,
 - `frontend/vite.config.ts`: Runs the frontend at port `5173` and proxies `/api` requests to the backend at `localhost:4000`.
 - `backend/src/server.ts`: Starts Express, enables JSON request parsing and CORS, and mounts the chat routes.
 - `backend/src/routes/chat.ts`: Validates the request, saves the query, runs retrieval, calls Claude, records messages, and returns the API response.
-- `backend/src/routes/knowledge.ts`: Accepts Markdown uploads, validates and saves them under `knowledge/` without overwriting an existing file.
-- `backend/src/retrieval/retrievalService.ts`: Finds and ranks paragraphs from Markdown knowledge files.
+- `backend/src/routes/knowledge.ts`: Accepts Markdown and plain-text transcript uploads, lists supported knowledge files, and deletes selected files under `knowledge/`.
+- `backend/src/retrieval/retrievalService.ts`: Finds and ranks paragraphs from Markdown and plain-text knowledge files.
 - `backend/src/services/claudeService.ts`: Builds and saves the prompt, invokes Claude Code CLI, logs its output, parses the response, and provides a local fallback when the CLI fails.
 - `backend/src/storage/storage.ts`: Reads and writes query and chat-history JSON files.
 - `backend/src/types.ts`: Backend request, response, retrieval, and message types.
@@ -109,9 +112,13 @@ Open `http://localhost:5173` in a browser. Keep both terminal processes running 
 
 ### Upload a Knowledge File
 
-Use **Upload .md** in the chat header and select a UTF-8 Markdown (`.md`) file. The backend accepts one file at a time, with a maximum size of 5 MB. It sanitizes the stored filename and returns a conflict response if a file with that name already exists; rename the upload to add it under another name. Uploaded Markdown is saved directly under `knowledge/` and is eligible for retrieval on the next question.
+Use **Upload knowledge** in the chat header and select a UTF-8 Markdown (`.md`) or plain-text (`.txt`) file. Plain-text files can contain transcripts with speaker labels and timestamps. The backend accepts one file at a time, with a maximum size of 5 MB. It sanitizes the stored filename and returns a conflict response if a file with that name already exists; rename the upload to add it under another name. Uploaded files are saved directly under `knowledge/` and are eligible for retrieval on the next question.
 
-Uploads of other formats are intentionally not supported yet. Add format-specific text extraction in a later parser step before allowing those extensions.
+PDF, DOCX, and other binary/document formats are not supported. They require format-specific text extraction before they can be used as knowledge sources.
+
+Click **Knowledge files** to open the file manager dialog. It lists the Markdown and text files in the knowledge base and provides a delete action for each file. Deletions require confirmation.
+
+`VIDEO_TRANSCRIPT_TEST.txt` at the project root is a sample file for manual testing. It is not searched while there: upload it through **Upload knowledge** so the app saves it under `knowledge/`.
 
 ### Build Checks
 
@@ -135,7 +142,7 @@ When a user submits a question, the application performs these steps:
 3. **Vite forwards the request.** During development, Vite proxies `/api` from port `5173` to Express on port `4000`.
 4. **Backend validates and trims the text.** `chat.ts` rejects an empty question with HTTP 400.
 5. **Backend saves the query.** The question and timestamp are appended to `storage/queries.json`.
-6. **Retrieval scans Markdown.** The retrieval service recursively scans `.md` files under `knowledge/`, splits the documents into paragraph-like blocks, and ignores blocks shorter than 81 characters.
+6. **Retrieval scans supported knowledge files.** The retrieval service recursively scans `.md` and `.txt` files under `knowledge/`, splits the documents at blank lines into paragraph-like blocks, and ignores blocks of 80 characters or fewer.
 7. **Retrieval ranks candidate blocks.** It tokenizes the question and document text, ranks with term frequency and inverse document frequency, gives extra weight to matching headings and filenames, favors diverse sources, and selects up to eight blocks according to question breadth (three for short/narrow questions and five by default).
 8. **Backend builds the context.** Each selected block is included with its source path and heading. If nothing matches, the context says that no relevant source material was found.
 9. **Claude prompt is built.** `claudeService.ts` combines the assistant rules, selected context, user question, and the requested four-section answer format.
@@ -148,14 +155,15 @@ When a user submits a question, the application performs these steps:
 
 ## 6. Retrieval: What Claude Receives
 
-Retrieval is a simple keyword-based method, not a vector database or semantic embedding search. It examines the local Markdown files and passes the selected paragraph contents to Claude. Claude does not have to discover the knowledge files to answer from those supplied excerpts.
+Retrieval is a local keyword/lexical ranking method, not a vector database or semantic embedding search. It examines Markdown files and plain-text transcripts under `knowledge/` and passes selected paragraph contents to Claude. Claude does not have to discover the knowledge files to answer from those supplied excerpts. Transcript timestamps and speaker labels are retained as text in the retrieved passages. Blocks must be longer than 80 characters to be considered.
 
-The backend selects at most eight paragraphs. The default is five, with fewer for short/narrow questions and more for broad questions. Retrieval uses local keyword ranking; it does not use embeddings or semantic search. Selected references include the source path and section heading.
+The backend selects at most eight paragraphs. The default is five; it selects three when the question has three or fewer searchable terms, and eight when the question contains a broad-scope keyword or at least ten searchable terms. Other questions use five. Ranking uses term frequency and inverse document frequency, boosts matches in section headings and filenames, removes duplicate passages, and favors no more than two passages from a source unless more are needed to fill the result.
 
 - The complete knowledge base is not placed into each prompt.
 - A relevant paragraph can be missed if it does not score highly for the question's words, heading, or filename.
-- Adding or editing `.md` files under `knowledge/` changes future retrieval without a separate indexing step.
-- The selected source paths and paragraph content are printed in the backend logs.
+- Adding or editing `.md` or `.txt` files under `knowledge/` changes future retrieval without a separate indexing step.
+- The selected source paths, section headings, and paragraph content are printed in the backend logs and passed to Claude.
+- The response is normalized into the plain-text sections Answer, Possible Root Cause, Recommended Actions, and Reference Sources. References use the retrieved source path and section heading.
 
 Claude Code is started with the project root as its current working directory. The prompt instructs it to use the supplied context and not greet the user. The server-generated context remains the core knowledge supplied for the request.
 
@@ -176,7 +184,7 @@ Open this file to inspect or manually submit the most recent complete prompt. If
 The backend terminal logs include:
 
 - Incoming and cleaned question.
-- Number of Markdown files scanned and retrieved chunks selected.
+- Number of supported knowledge files scanned and retrieved chunks selected.
 - Chunk source, relevance score, heading, and content.
 - Context assembled for Claude.
 - Exact prompt and its saved path.
@@ -202,7 +210,7 @@ Logs and `claude-prompt.txt` contain user questions and retrieved knowledge text
 - `storage/chat-history.json`: Array of user and assistant messages, timestamps, and references.
 - `storage/claude-prompt.txt`: The latest full prompt. It is overwritten on the next request.
 
-These files are local JSON/text storage, not a database. On startup, the chat screen loads the most recent 100 persisted messages; if there is no saved history, it displays the welcome message.
+These files are local JSON/text storage, not a database. On startup, the chat screen loads the most recent 100 persisted messages; if there is no saved history, it displays the welcome message. Knowledge management is available through the **Knowledge files** dialog; uploads and deletions update the files under `knowledge/`.
 
 ## 9. API Endpoints
 
@@ -236,21 +244,21 @@ Returns the most recent saved chat messages, up to a maximum of 100, in chronolo
 
 ### `GET /api/knowledge`
 
-Returns Markdown file paths, sizes, and last-updated timestamps under `knowledge/`.
+Returns Markdown and plain-text file paths, sizes, and last-updated timestamps under `knowledge/`.
 
 ### `DELETE /api/knowledge?path=<relative-path>`
 
-Deletes the specified Markdown file under `knowledge/`. Paths outside the knowledge directory are rejected. A missing file returns HTTP 404.
+Deletes the specified `.md` or `.txt` file under `knowledge/`. Paths outside the knowledge directory are rejected. A missing file returns HTTP 404.
 
 ### `POST /api/knowledge/upload`
 
 Send a multipart form-data request with one file field named `file`:
 
 ```text
-file: <UTF-8 Markdown file, maximum 5 MB>
+file: <UTF-8 Markdown (.md) or plain-text (.txt) file, maximum 5 MB>
 ```
 
-Successful uploads return HTTP 201 with `ok`, `message`, `fileName`, and `sizeBytes`. Unsupported file types or invalid Markdown receive HTTP 400, files over the size limit receive HTTP 413, and a duplicate filename receives HTTP 409. The original upload is stored as Markdown; no document parser or format conversion is performed yet.
+Successful uploads return HTTP 201 with `ok`, `message`, `fileName`, and `sizeBytes`. Unsupported file types or invalid text receive HTTP 400, files over the size limit receive HTTP 413, and a duplicate filename receives HTTP 409. The uploaded content is stored as-is; no format conversion or transcript parser is performed.
 
 ## 10. Common Troubleshooting
 
@@ -264,7 +272,7 @@ Find the `response source: local fallback` message immediately before the respon
 
 ### No relevant chunks were retrieved
 
-Look for `scanning ... markdown files`, `no relevant knowledge chunks found`, and `selected top ... chunks`. Confirm the knowledge documents are `.md` files under the repository's `knowledge/` directory and that their content contains the concepts/terms in the question.
+Look for `scanning ... knowledge files`, `no relevant knowledge chunks found`, and `selected top ... chunks`. Confirm the files are `.md` or `.txt` files under the repository's `knowledge/` directory and that their content contains concepts or terms related to the question. A `.txt` file at the project root is not retrieved; upload it through the app or move it into `knowledge/`.
 
 ### The prompt file did not change
 
@@ -288,6 +296,7 @@ The backend defaults to port `4000`; set `PORT` to use a different backend port.
 
 - Retrieval uses local lexical scoring over paragraph blocks; it is not semantic/vector search.
 - The adaptive retrieval limit is at most eight blocks per question.
+- The supported knowledge formats are UTF-8 Markdown and plain text. PDF, DOCX, and video/audio files are not parsed; video transcripts must be supplied as text.
 - Chat history is one local conversation transcript; there are not yet separate named conversations or per-chat deletion.
 - Data is stored in local JSON files; there is no database, multi-user identity, or access-control layer in the current implementation.
 - Prompt snapshots and backend logs include submitted questions and retrieved source content.

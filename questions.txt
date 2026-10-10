@@ -1,12 +1,123 @@
-Why is namespace validation failing?
-What usually causes migration validation to fail?
-Why do we see access denied errors during onboarding?
-What should we check when the Trident service account cannot read project metadata?
-Why is the deployment blocked before application code is even evaluated?
-What are the most common causes of namespace approval issues?
-How do we resolve a failed cutover in the target cluster?
-What does the migration runbook say about stale credentials?
-What is the recommended first step when the namespace is missing from the registry?
-Why is repository access a common incident cause in Trident?
+TRIDENT AI ASSISTANT - RETRIEVAL TEST QUESTIONS
 
-What steps should I follow to get a new Trident namespace through onboarding validation?
+Use each question in the chat, then check the response references against the expected knowledge sources. Sources listed as supporting may also appear when their retrieved passages are relevant. Answers can be phrased differently; verify the key facts, not exact wording.
+
+========================================
+ONBOARDING - knowledge/onboarding.md
+========================================
+
+1. Why can namespace validation fail even when the application configuration is complete?
+   Expected source: onboarding.md
+   Check for: missing registry approval or cluster identity allowlist; validation can fail before deployment.
+
+2. What should we check when the Trident service account cannot read project metadata?
+   Expected source: onboarding.md
+   Check for: required read and write access; correct missing permissions and rerun validation.
+
+3. What steps should I follow to get a new Trident namespace through onboarding validation?
+   Expected source: onboarding.md
+   Check for: create namespace, validate service-account permissions, verify registry entry, then run the final validation workflow.
+
+4. What should be completed before scheduling a production cutover for a new namespace?
+   Expected source: onboarding.md
+   Check for: namespace approval and registration before cutover.
+
+========================================
+MIGRATION - knowledge/migration_guide.md
+========================================
+
+5. What usually causes migration validation to fail?
+   Expected source: migration_guide.md
+   Check for: destination namespace not registered or approved; credentials, environment variables, or access configuration may be stale or mismatched.
+
+6. How do we prepare the target cluster before a migration cutover?
+   Expected source: migration_guide.md
+   Check for: compare source and target registries, confirm destination approval, validate environment variables, verify service-account access, and run a dry-run.
+
+7. What does the migration runbook say about stale credentials?
+   Expected source: migration_guide.md
+   Check for: refresh or reissue the service-account secret when stale, then rerun migration validation.
+
+8. What information belongs in the migration decision record?
+   Expected source: migration_guide.md
+   Check for: target namespace, approval timestamp, and owner.
+
+9. How should we validate a package or image change during migration?
+   Expected source: migration_guide.md
+   Check for: verify repository access tokens and permission scopes, then run migration validation.
+
+========================================
+INCIDENT TRIAGE - knowledge/jira_runbooks.md
+========================================
+
+10. What is the recommended first step when the namespace is missing from the registry?
+    Expected source: jira_runbooks.md
+    Check for: check the registry record first; then check service-account access and deployment-secret rotation.
+
+11. What information should be captured before escalating a namespace validation incident?
+    Expected source: jira_runbooks.md
+    Check for: affected namespace, application owner, latest validation run, validation error, suspected root cause, and mitigation already taken.
+
+12. What must be confirmed before closing a validation incident?
+    Expected source: jira_runbooks.md
+    Check for: validator passes in the target environment.
+
+========================================
+OPERATIONAL FAQ - knowledge/trident_faq.md
+========================================
+
+13. What are the common causes of namespace validation and migration failures?
+    Expected source: trident_faq.md
+    Check for: missing namespace entry, expired credentials, and policy mismatch between source and destination clusters.
+
+14. What should the platform team investigate before changing application code?
+    Expected source: trident_faq.md
+    Check for: namespace registry, service-account permission set, and configuration checks; stale environment variables may be involved.
+
+========================================
+OFFICE-HOURS TRANSCRIPTS
+========================================
+
+15. Why can an approved source namespace still fail validation in the target environment?
+    Expected source: office_hours_sessions/session_001.md
+    Supporting source: migration_guide.md
+    Check for: approval is environment-specific; destination approval must exist before cutover.
+
+16. Why might namespace validation fail before a repository access issue is checked?
+    Expected source: office_hours_sessions/session_002.md
+    Check for: namespace validation is a gating check; repository access may be secondary.
+
+17. What should the team record when namespace validation and service-account access both appear to be failing?
+    Expected source: office_hours_sessions/session_002.md
+    Check for: validation error, approval/registry state, and service-account access evidence before escalation.
+
+18. What should we verify if the namespace exists but onboarding still reports access problems?
+    Expected source: office_hours_sessions/session_003.md
+    Supporting source: onboarding.md
+    Check for: registry approval, service-account project-metadata permissions, and refreshed authorization token.
+
+========================================
+PLAIN-TEXT VIDEO TRANSCRIPT
+========================================
+
+Upload VIDEO_TRANSCRIPT_TEST.txt using Upload knowledge before trying these. The file must be stored under knowledge/ to be searchable; a copy left at the project root is not retrieved.
+
+19. According to the onboarding video transcript, what should be checked before rerunning validation?
+    Expected source: VIDEO_TRANSCRIPT_TEST.txt (after upload, under knowledge/)
+    Check for: namespace registry approval, cluster identity allowlist, and service-account read/write permissions.
+
+20. What does the video transcript say to do after fixing a missing registry entry or permission?
+    Expected source: VIDEO_TRANSCRIPT_TEST.txt (after upload, under knowledge/)
+    Check for: rerun the validation workflow and do not schedule production cutover until the namespace is approved.
+
+========================================
+CROSS-SOURCE / BROAD RETRIEVAL
+========================================
+
+21. Compare the checks required for namespace onboarding and migration cutover.
+    Expected sources: onboarding.md and migration_guide.md
+    Check for: registry/approval and permissions are needed during onboarding; migration also requires destination-environment approval, environment and credential checks, and a dry-run before traffic shift.
+
+22. Give an overview of the first checks for namespace validation, migration, and incident triage.
+    Expected sources: onboarding.md, migration_guide.md, and jira_runbooks.md
+    Check for: verify registry/approval, service-account access, and environment/secret state; use the runbook order and capture incident details.
