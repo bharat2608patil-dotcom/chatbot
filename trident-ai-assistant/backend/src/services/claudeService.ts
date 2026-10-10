@@ -102,6 +102,8 @@ export async function callClaude(commandPrompt: ClaudeRequest, timeoutMs = 60000
   const prompt = buildClaudePrompt(commandPrompt.context, commandPrompt.userQuestion);
   console.log('[claude] prompt prepared');
   console.log(`[claude] prompt length: ${prompt.length}`);
+  console.log('[claude] exact prompt passed to CLI:');
+  console.log(prompt);
 
   return new Promise((resolve) => {
     const claudeCommand = isWindows() ? 'claude.cmd' : 'claude';

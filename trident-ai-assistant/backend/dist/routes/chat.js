@@ -38,6 +38,12 @@ router.post('/api/chat', async (req, res) => {
         if (retrieved.chunks.length === 0) {
             console.warn('[chat] no relevant knowledge chunks found');
         }
+        console.log('[chat] selected knowledge chunks for Claude:');
+        retrieved.chunks.forEach((chunk, index) => {
+            console.log(`[chat] chunk ${index + 1}: source=${chunk.source}, score=${chunk.score}`);
+            console.log(`[chat] chunk ${index + 1} heading: ${chunk.heading}`);
+            console.log(`[chat] chunk ${index + 1} content:\n${chunk.content}`);
+        });
         const contextBlocks = retrieved.chunks.map((chunk) => {
             return [
                 `Source: ${chunk.source}`,
@@ -47,6 +53,9 @@ router.post('/api/chat', async (req, res) => {
         });
         const context = contextBlocks.length > 0 ? contextBlocks.join('\n\n') : 'No relevant source material was found in the local knowledge base.';
         console.log(`[chat] context built. length=${context.length}`);
+        console.log('[chat] exact question and knowledge context passed to Claude:');
+        console.log(`[chat] question: ${cleanQuestion}`);
+        console.log(`[chat] context:\n${context}`);
         console.log('[chat] calling Claude CLI with retrieved context');
         const claudeResult = await (0, claudeService_1.callClaude)({
             systemPrompt: 'You are Trident AI Assistant.',
