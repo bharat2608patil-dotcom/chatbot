@@ -102,5 +102,109 @@
       "office_hours_sessions/session_002.md",
       "trident_faq.md"
     ]
+  },
+  {
+    "id": "9e04503d-c915-4163-becd-cd7a90546ea0",
+    "role": "user",
+    "content": "How do I validate a migration cutover?",
+    "timestamp": "2026-10-10T06:57:40.258Z",
+    "references": [
+      "migration_guide.md",
+      "office_hours_sessions/session_002.md",
+      "migration_guide.md",
+      "migration_guide.md",
+      "jira_runbooks.md"
+    ]
+  },
+  {
+    "id": "30221bfb-5e4a-4275-b930-4052f88847c1",
+    "role": "assistant",
+    "content": "Migration issues are usually caused by a missing destination-cluster registration or stale credentials during the validation gate.",
+    "timestamp": "2026-10-10T06:57:40.258Z",
+    "references": [
+      "migration_guide.md",
+      "office_hours_sessions/session_002.md",
+      "migration_guide.md",
+      "migration_guide.md",
+      "jira_runbooks.md"
+    ]
+  },
+  {
+    "id": "9125b554-ed43-46e4-82df-cf2e2510a082",
+    "role": "user",
+    "content": "Why is repository access a common incident cause in Trident?",
+    "timestamp": "2026-10-10T06:58:11.351Z",
+    "references": [
+      "migration_guide.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_002.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_003.md"
+    ]
+  },
+  {
+    "id": "adc3174f-caa6-4412-a99f-0540f8345403",
+    "role": "assistant",
+    "content": "Access issues are commonly caused by missing repository permissions or a stale service account secret. The validation checks fail until the authorization state is corrected.",
+    "timestamp": "2026-10-10T06:58:11.351Z",
+    "references": [
+      "migration_guide.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_002.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_003.md"
+    ]
+  },
+  {
+    "id": "64560145-da07-4b1d-91cc-c989b8cc81ca",
+    "role": "user",
+    "content": "Why is repository access a common incident cause in Trident?",
+    "timestamp": "2026-10-10T06:58:25.814Z",
+    "references": [
+      "migration_guide.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_002.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_003.md"
+    ]
+  },
+  {
+    "id": "9a86ccf8-0108-405d-bcdf-05dfdc55a8e3",
+    "role": "assistant",
+    "content": "Access issues are commonly caused by missing repository permissions or a stale service account secret. The validation checks fail until the authorization state is corrected.",
+    "timestamp": "2026-10-10T06:58:25.814Z",
+    "references": [
+      "migration_guide.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_002.md",
+      "office_hours_sessions/session_003.md",
+      "office_hours_sessions/session_003.md"
+    ]
+  },
+  {
+    "id": "5c0c98b4-816d-4d3f-8778-cf40c276b5be",
+    "role": "user",
+    "content": "Why do we see access denied errors during onboarding?",
+    "timestamp": "2026-10-10T07:01:11.025Z",
+    "references": [
+      "migration_guide.md",
+      "onboarding.md",
+      "migration_guide.md",
+      "migration_guide.md",
+      "office_hours_sessions/session_002.md"
+    ]
+  },
+  {
+    "id": "0f28710b-ef67-438f-802a-18ca29fbe244",
+    "role": "assistant",
+    "content": "Access issues are commonly caused by missing repository permissions or a stale service account secret. The validation checks fail until the authorization state is corrected.",
+    "timestamp": "2026-10-10T07:01:11.025Z",
+    "references": [
+      "migration_guide.md",
+      "onboarding.md",
+      "migration_guide.md",
+      "migration_guide.md",
+      "office_hours_sessions/session_002.md"
+    ]
   }
 ]

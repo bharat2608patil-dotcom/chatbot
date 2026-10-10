@@ -14,5 +14,21 @@
   {
     "question": "What usually causes migration validation to fail?",
     "timestamp": "2026-10-10T06:55:55.940Z"
+  },
+  {
+    "question": "How do I validate a migration cutover?",
+    "timestamp": "2026-10-10T06:57:40.199Z"
+  },
+  {
+    "question": "Why is repository access a common incident cause in Trident?",
+    "timestamp": "2026-10-10T06:58:11.155Z"
+  },
+  {
+    "question": "Why is repository access a common incident cause in Trident?",
+    "timestamp": "2026-10-10T06:58:25.597Z"
+  },
+  {
+    "question": "Why do we see access denied errors during onboarding?",
+    "timestamp": "2026-10-10T07:01:10.893Z"
   }
 ]

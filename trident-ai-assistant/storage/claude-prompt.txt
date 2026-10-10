@@ -8,29 +8,29 @@ Rules:
 5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
 
 CONTEXT:
-Source: jira_runbooks.md
-Heading: The support workflow starts with incident classification and a review of name...
-Content: The support workflow starts with incident classification and a review of namespace registration state. We capture the affected namespace, application owner, and the most recent validation run. The team then confirms whether the issue is a permissions problem, a namespace mismatch, or a failed migration gate.
-
-Source: migration_guide.md
-Heading: The migration process moves namespaces in waves. We start by comparing the so...
-Content: The migration process moves namespaces in waves. We start by comparing the source and target registries, then confirm the same service account and secret material are present in both environments. If the namespace is not registered in the destination cluster, the migration checker fails before the project gets a final approval.
-
 Source: migration_guide.md
 Heading: During the cutover window, the team validates all environment variables and v...
 Content: During the cutover window, the team validates all environment variables and verifies that the Trident service account can read the deployment manifests. We often see a failure when the source cluster was approved in the old onboarding flow, but the new namespace was never added to the target environment approval list. The migration runbook calls for a dry-run validation before the final traffic shift.
+
+Source: onboarding.md
+Heading: Service account access is a common blocking issue. The onboarding check expec...
+Content: Service account access is a common blocking issue. The onboarding check expects the Trident account to have read and write access to the project metadata. If the permissions were not granted during the provisioning step, the validation job will return an access denied error and the team must re-run the validation after the permission set is corrected.
+
+Source: migration_guide.md
+Heading: When the rollout includes a package or image change, we also verify the repos...
+Content: When the rollout includes a package or image change, we also verify the repository access tokens and permission scopes. A common recovery step is to reissue the service account secret and re-run the migration validation. We do not skip the registry check because the application can appear healthy while the namespace policy still blocks the cutover.
+
+Source: migration_guide.md
+Heading: The decision record should list the target namespace, approval timestamp, and...
+Content: The decision record should list the target namespace, approval timestamp, and owner. Without that record, the migration team cannot prove that the destination cluster had a clean onboarding status before the activity window begins.
 
 Source: office_hours_sessions/session_002.md
 Heading: Trident Team:
 Content: Trident Team:
 Validate the target namespace entry, confirm the service account permissions, and run a dry-run validation before the actual migration. If the permission set is stale, refresh the access token and re-run the migration checks.
 
-Source: trident_faq.md
-Heading: The platform team monitors namespace validation, service account health, and ...
-Content: The platform team monitors namespace validation, service account health, and migration approvals. Most failures cluster around one of three items: a missing namespace entry, expired credentials, or a policy mismatch between the source and destination clusters.
-
 QUESTION:
-What usually causes migration validation to fail?
+Why do we see access denied errors during onboarding?
 
 Provide:
 1. Answer
