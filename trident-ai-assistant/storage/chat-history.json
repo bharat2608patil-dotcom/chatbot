@@ -1,0 +1,28 @@
+[
+  {
+    "id": "707b6b62-5872-4f15-9e78-9ed216f4f4b6",
+    "role": "user",
+    "content": "Why is namespace validation failing?",
+    "timestamp": "2026-10-10T05:29:52.590Z",
+    "references": [
+      "jira_runbooks.md",
+      "onboarding.md",
+      "trident_faq.md",
+      "migration_guide.md",
+      "migration_guide.md"
+    ]
+  },
+  {
+    "id": "c2850d70-91d8-4bc6-859e-f4b6299b1dca",
+    "role": "assistant",
+    "content": "Namespace validation failures typically occur when the namespace has not yet been registered or approved in the target environment. The validation flow will fail before deployment until the registry entry and permissions are corrected.",
+    "timestamp": "2026-10-10T05:29:52.590Z",
+    "references": [
+      "jira_runbooks.md",
+      "onboarding.md",
+      "trident_faq.md",
+      "migration_guide.md",
+      "migration_guide.md"
+    ]
+  }
+]

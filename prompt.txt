@@ -1,0 +1,454 @@
+You are a Senior Full Stack Engineer, AI Engineer, and Solution Architect.
+
+Your objective is to generate a COMPLETE WORKING APPLICATION.
+
+IMPORTANT RULES
+
+- Focus on executable code.
+- Prioritize application functionality over documentation.
+- Do not generate architecture documents.
+- Do not generate extensive explanations.
+- Do not generate README files.
+- Do not create placeholder implementations.
+- Do not leave TODO comments.
+- Every file must be complete and runnable.
+- Generate production-quality code.
+- Verify imports and references before outputting code.
+
+==================================================
+APPLICATION OBJECTIVE
+==================================================
+
+Build an AI-powered Trident Assistant using:
+
+Frontend:
+- React
+- TypeScript
+- Material UI
+
+Backend:
+- Node.js
+- Express
+- TypeScript
+
+AI Engine:
+- Claude CLI (claude.cmd)
+
+Storage:
+- Local JSON files
+- Local Markdown files
+
+NO DATABASE
+
+NO OPENAI
+
+NO ANTHROPIC API
+
+NO VECTOR DATABASE
+
+NO CLOUD SERVICES
+
+==================================================
+ARCHITECTURE
+==================================================
+
+React Chat UI
+      │
+      │ POST /api/chat
+      ▼
+Express Server
+      │
+      │ Save query
+      ▼
+Knowledge Retrieval Engine
+      │
+      ├── onboarding.md
+      ├── trident_faq.md
+      ├── migration_guide.md
+      ├── office_hours_sessions/
+      ├── jira_runbooks.md
+      │
+      ▼
+Top Relevant Content
+      │
+      ▼
+claude.cmd
+      │
+      │ Context + User Question
+      ▼
+AI Generated Answer
+      │
+      ▼
+React UI Response
+
+==================================================
+IMPORTANT KNOWLEDGE BASE DESIGN
+==================================================
+
+DO NOT build a FAQ chatbot.
+
+DO NOT return predefined answers.
+
+The chatbot must work like a lightweight RAG system.
+
+Knowledge files contain:
+
+- Office Hours transcripts
+- Runbooks
+- Migration discussions
+- Troubleshooting discussions
+- Team knowledge
+- Incident learnings
+
+Claude must synthesize answers from retrieved content.
+
+==================================================
+EXAMPLE
+==================================================
+
+User Question:
+
+"Why is namespace validation failing?"
+
+Retrieved Transcript:
+
+Application Team:
+Namespace validation failed.
+
+Trident Team:
+This usually happens when the namespace has not been registered.
+
+Claude should generate:
+
+"Namespace validation failures typically occur when the namespace has not yet been registered or approved. Verify namespace registration and rerun onboarding validation."
+
+The answer must be generated dynamically.
+
+==================================================
+FIRST TASK
+==================================================
+
+Generate shell commands first.
+
+Output commands only.
+
+Commands must:
+
+1. Create project
+2. Create frontend
+3. Create backend
+4. Install dependencies
+5. Create folder structure
+6. Run frontend
+7. Run backend
+
+After commands continue automatically.
+
+==================================================
+PROJECT STRUCTURE
+==================================================
+
+trident-ai-assistant/
+
+frontend/
+
+src/
+components/
+pages/
+services/
+hooks/
+types/
+
+backend/
+
+src/
+routes/
+services/
+agents/
+retrieval/
+storage/
+knowledge/
+utils/
+types/
+
+storage/
+
+queries.json
+chat-history.json
+
+knowledge/
+
+onboarding.md
+migration_guide.md
+trident_faq.md
+jira_runbooks.md
+
+office_hours_sessions/
+
+session_001.md
+session_002.md
+session_003.md
+
+==================================================
+BACKEND REQUIREMENTS
+==================================================
+
+Create:
+
+server.ts
+
+Routes:
+
+POST /api/chat
+
+GET /api/health
+
+==================================================
+CHAT FLOW
+==================================================
+
+1. User sends question.
+
+2. Save query into:
+
+storage/queries.json
+
+3. Run retrieval engine.
+
+4. Search knowledge files.
+
+5. Extract relevant chunks.
+
+6. Select top matching chunks.
+
+7. Build Claude prompt.
+
+8. Call claude.cmd.
+
+9. Capture response.
+
+10. Save response in history.
+
+11. Return answer to frontend.
+
+==================================================
+RETRIEVAL ENGINE
+==================================================
+
+Build custom retrieval engine.
+
+NO VECTOR DATABASE.
+
+NO EMBEDDINGS.
+
+Use:
+
+- Keyword scoring
+- Relevance ranking
+- File scoring
+- Paragraph chunking
+- Top-N chunk retrieval
+
+Search all:
+
+*.md
+
+Include transcript files.
+
+Return:
+
+Top 5 most relevant chunks.
+
+==================================================
+TRANSCRIPT PROCESSING
+==================================================
+
+Office-hour files contain conversation transcripts.
+
+Example:
+
+Application Team:
+Build failed.
+
+Trident Team:
+Repository access missing.
+
+Application Team:
+How do we fix it?
+
+Trident Team:
+Grant access to Trident service account.
+
+The retrieval engine must:
+
+- Search transcript text
+- Extract relevant sections
+- Send sections to Claude
+
+==================================================
+CLAUDE SERVICE
+==================================================
+
+Use:
+
+child_process.spawn
+
+Command:
+
+claude.cmd
+
+Requirements:
+
+- timeout support
+- stdout capture
+- stderr capture
+- process failure handling
+- cancellation support
+
+==================================================
+CLAUDE PROMPT TEMPLATE
+==================================================
+
+You are Trident AI Assistant.
+
+Rules:
+
+1. Use only supplied context.
+2. Prefer transcript evidence.
+3. Combine information from multiple sources.
+4. Do not invent procedures.
+5. If answer is unavailable, say:
+
+"I could not find this information in the available knowledge sources."
+
+CONTEXT:
+
+{{RETRIEVED_CONTENT}}
+
+QUESTION:
+
+{{USER_QUESTION}}
+
+Provide:
+
+1. Answer
+2. Possible Root Cause
+3. Recommended Actions
+4. Reference Sources
+
+==================================================
+FRONTEND REQUIREMENTS
+==================================================
+
+Create modern chat application.
+
+Use:
+
+- Material UI
+- React TypeScript
+
+Features:
+
+- Chat window
+- Message bubbles
+- Send button
+- Enter to send
+- Typing indicator
+- Loading animation
+- Auto scroll
+- Error handling
+- Responsive layout
+- Dark mode
+- Source references
+- Timestamp display
+
+==================================================
+TYPESCRIPT TYPES
+==================================================
+
+Create:
+
+ChatRequest
+ChatResponse
+ChatMessage
+KnowledgeChunk
+SearchResult
+RetrievalResult
+ClaudeRequest
+ClaudeResponse
+
+==================================================
+KNOWLEDGE FILES
+==================================================
+
+Generate realistic content.
+
+Create:
+
+onboarding.md
+migration_guide.md
+trident_faq.md
+jira_runbooks.md
+
+Create transcript files:
+
+session_001.md
+session_002.md
+session_003.md
+
+These files must contain real conversation-style discussions.
+
+Do NOT use Q&A format.
+
+Use transcript format.
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+For every file:
+
+FILE:
+backend/src/server.ts
+
+<complete code>
+
+FILE:
+backend/src/routes/chat.ts
+
+<complete code>
+
+Continue until all files are generated.
+
+==================================================
+VERIFICATION PASS
+==================================================
+
+After generating all files:
+
+Perform validation.
+
+Check:
+
+- imports
+- exports
+- types
+- routes
+- build errors
+- TypeScript compile issues
+- file paths
+- package.json scripts
+
+Fix issues before final output.
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Generate the application first.
+
+Minimize documentation.
+
+Maximize runnable code.
+
+Start with project creation commands.
