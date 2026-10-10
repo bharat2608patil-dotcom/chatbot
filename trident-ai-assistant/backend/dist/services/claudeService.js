@@ -21,6 +21,7 @@ Rules:
 3. Combine information from multiple sources.
 4. Do not invent procedures.
 5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
+6. Do not greet the user or say you are ready to help. Start directly with the requested answer format.
 
 CONTEXT:
 ${context}
@@ -115,12 +116,17 @@ async function callClaude(commandPrompt, timeoutMs = 60000) {
     return new Promise((resolve) => {
         const claudeCommand = isWindows() ? 'claude.cmd' : 'claude';
         console.log(`[claude] starting CLI: ${claudeCommand}`);
-        const child = (0, node_child_process_1.spawn)(claudeCommand, ['-p', prompt], {
-            cwd: node_path_1.default.resolve(__dirname, '../../'),
+        const cliInstruction = 'Answer the Trident support request supplied through stdin. Do not greet the user; follow its requested response format.';
+        const projectRoot = node_path_1.default.resolve(__dirname, '../../../');
+        console.log(`[claude] CLI working directory: ${projectRoot}`);
+        console.log(`[claude] CLI instruction argument: ${cliInstruction}`);
+        const child = (0, node_child_process_1.spawn)(claudeCommand, ['-p', cliInstruction], {
+            cwd: projectRoot,
             env: process.env,
             shell: isWindows(),
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: ['pipe', 'pipe', 'pipe'],
         });
+        child.stdin.end(prompt, 'utf8');
         const timer = setTimeout(() => {
             console.warn(`[claude] timeout after ${timeoutMs}ms; using fallback response`);
             console.log(`[claude] partial CLI stdout before timeout (${stdout.length} characters):`);

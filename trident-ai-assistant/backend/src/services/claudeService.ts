@@ -16,6 +16,7 @@ Rules:
 3. Combine information from multiple sources.
 4. Do not invent procedures.
 5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
+6. Do not greet the user or say you are ready to help. Start directly with the requested answer format.
 
 CONTEXT:
 ${context}
@@ -119,13 +120,18 @@ export async function callClaude(commandPrompt: ClaudeRequest, timeoutMs = 60000
   return new Promise((resolve) => {
     const claudeCommand = isWindows() ? 'claude.cmd' : 'claude';
     console.log(`[claude] starting CLI: ${claudeCommand}`);
+    const cliInstruction = 'Answer the Trident support request supplied through stdin. Do not greet the user; follow its requested response format.';
+    const projectRoot = path.resolve(__dirname, '../../../');
+    console.log(`[claude] CLI working directory: ${projectRoot}`);
+    console.log(`[claude] CLI instruction argument: ${cliInstruction}`);
 
-    const child = spawn(claudeCommand, ['-p', prompt], {
-      cwd: path.resolve(__dirname, '../../'),
+    const child = spawn(claudeCommand, ['-p', cliInstruction], {
+      cwd: projectRoot,
       env: process.env,
       shell: isWindows(),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
+    child.stdin.end(prompt, 'utf8');
 
     const timer = setTimeout(() => {
       console.warn(`[claude] timeout after ${timeoutMs}ms; using fallback response`);
