@@ -25,3 +25,9 @@ export interface KnowledgeFile {
   sizeBytes: number;
   updatedAt: string;
 }
+
+export interface KnowledgeAuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+  csrfToken?: string | null;
+}

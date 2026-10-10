@@ -2,9 +2,11 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Router, type RequestHandler } from 'express';
 import multer from 'multer';
+import { requireKnowledgeAuth } from '../services/knowledgeAuth';
 
 const router = Router();
 const knowledgeDirectory = path.resolve(__dirname, '../../../knowledge');
+router.use(requireKnowledgeAuth);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {

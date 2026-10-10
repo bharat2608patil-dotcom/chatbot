@@ -1,4 +1,4 @@
-import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -32,8 +32,18 @@ import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
-import { deleteKnowledgeFile, getKnowledgeFiles, loadChatHistory, sendChatQuestion, uploadKnowledgeFile } from './services/chatApi';
-import type { ChatMessage, ChatResponse, KnowledgeFile } from './types/chat';
+import {
+  deleteKnowledgeFile,
+  getKnowledgeAuthStatus,
+  getKnowledgeFiles,
+  loadChatHistory,
+  loginKnowledgeAdmin,
+  logoutKnowledgeAdmin,
+  sendChatQuestion,
+  setupKnowledgeAdmin,
+  uploadKnowledgeFile,
+} from './services/chatApi';
+import type { ChatMessage, ChatResponse, KnowledgeAuthStatus, KnowledgeFile } from './types/chat';
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const UPLOAD_PREVIEW_CHARACTERS = 5000;
@@ -113,6 +123,15 @@ function App() {
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [messages, setMessages] = useState<ChatMessage[]>([starterMessage]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [authConfigured, setAuthConfigured] = useState<boolean | null>(null);
+  const [authAuthenticated, setAuthAuthenticated] = useState(false);
+  const [knowledgeCsrfToken, setKnowledgeCsrfToken] = useState<string | null>(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authUsername, setAuthUsername] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authSetupCode, setAuthSetupCode] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -155,15 +174,19 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    getKnowledgeFiles()
-      .then((files) => {
-        if (!cancelled) setKnowledgeFiles(files);
+    getKnowledgeAuthStatus()
+      .then((status) => {
+        if (!cancelled) {
+          setAuthConfigured(status.configured);
+          setAuthAuthenticated(status.authenticated);
+          setKnowledgeCsrfToken(status.csrfToken ?? null);
+        }
       })
-      .catch((filesError: unknown) => {
+      .catch((statusError: unknown) => {
         if (!cancelled) {
           setChatNotice({
             severity: 'error',
-            message: filesError instanceof Error ? filesError.message : 'Unable to load knowledge files for suggested questions.',
+            message: statusError instanceof Error ? statusError.message : 'Unable to check knowledge management access.',
           });
         }
       });
@@ -174,12 +197,93 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!authAuthenticated) return;
+
+    let cancelled = false;
+    getKnowledgeFiles()
+      .then((files) => {
+        if (!cancelled) setKnowledgeFiles(files);
+      })
+      .catch((filesError: unknown) => {
+        if (cancelled) return;
+        if (filesError instanceof Error && filesError.message === 'Knowledge management login required.') {
+          setAuthAuthenticated(false);
+          setKnowledgeCsrfToken(null);
+          setKnowledgeFiles([]);
+          setAuthDialogOpen(true);
+          setAuthError('Your knowledge management session expired. Please log in again.');
+          return;
+        }
+        setChatNotice({
+          severity: 'error',
+          message: filesError instanceof Error ? filesError.message : 'Unable to load knowledge files for suggested questions.',
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authAuthenticated]);
+
+  useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
   const refreshKnowledgeFiles = async () => {
     const files = await getKnowledgeFiles();
     setKnowledgeFiles(files);
+  };
+
+  const handleKnowledgeAuthError = (requestError: unknown): boolean => {
+    if (!(requestError instanceof Error) || requestError.message !== 'Knowledge management login required.') {
+      return false;
+    }
+    setAuthAuthenticated(false);
+    setKnowledgeCsrfToken(null);
+    setKnowledgeFiles([]);
+    setAuthDialogOpen(true);
+    setKnowledgeFilesOpen(false);
+    setAuthError('Your knowledge management session expired. Please log in again.');
+    return true;
+  };
+
+  const handleKnowledgeAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError('');
+    try {
+      const status: KnowledgeAuthStatus = authConfigured
+        ? await loginKnowledgeAdmin(authUsername.trim(), authPassword)
+        : await setupKnowledgeAdmin(authUsername.trim(), authPassword, authSetupCode.trim());
+      setAuthConfigured(status.configured);
+      setAuthAuthenticated(status.authenticated);
+      setKnowledgeCsrfToken(status.csrfToken ?? null);
+      setAuthDialogOpen(false);
+      setAuthPassword('');
+      setAuthSetupCode('');
+      setAuthError('');
+    } catch (authenticationError) {
+      setAuthError(authenticationError instanceof Error ? authenticationError.message : 'Knowledge management authentication failed.');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleKnowledgeLogout = async () => {
+    try {
+      await logoutKnowledgeAdmin();
+      setAuthAuthenticated(false);
+      setKnowledgeCsrfToken(null);
+      setAuthDialogOpen(false);
+      setKnowledgeFiles([]);
+      setKnowledgeFilesOpen(false);
+      setChatNotice({ severity: 'success', message: 'Logged out of knowledge management.' });
+    } catch (logoutError) {
+      setChatNotice({
+        severity: 'error',
+        message: logoutError instanceof Error ? logoutError.message : 'Unable to log out of knowledge management.',
+      });
+    }
   };
 
   const filteredKnowledgeFiles = knowledgeFiles.filter((file) =>
@@ -198,6 +302,11 @@ function App() {
   )].slice(0, 6);
 
   const handleToggleKnowledgeFiles = async () => {
+    if (!authAuthenticated || !knowledgeCsrfToken) {
+      setAuthError('');
+      setAuthDialogOpen(true);
+      return;
+    }
     const open = !knowledgeFilesOpen;
     setKnowledgeFilesOpen(open);
     if (!open) return;
@@ -207,6 +316,7 @@ function App() {
     try {
       await refreshKnowledgeFiles();
     } catch (filesError) {
+      if (handleKnowledgeAuthError(filesError)) return;
       setUploadFeedback({
         severity: 'error',
         message: filesError instanceof Error ? filesError.message : 'Unable to load knowledge files.',
@@ -265,6 +375,11 @@ function App() {
     if (!file) {
       return;
     }
+    if (!authAuthenticated || !knowledgeCsrfToken) {
+      setAuthError('');
+      setAuthDialogOpen(true);
+      return;
+    }
 
     setPendingUploadFile(file);
     setUploadPreview('');
@@ -294,12 +409,12 @@ function App() {
   };
 
   const handleConfirmKnowledgeUpload = async () => {
-    if (!pendingUploadFile || uploadPreviewError || uploadPreviewLoading) return;
+    if (!pendingUploadFile || !knowledgeCsrfToken || uploadPreviewError || uploadPreviewLoading) return;
 
     setUploadingKnowledge(true);
     setUploadFeedback(null);
     try {
-      const result = await uploadKnowledgeFile(pendingUploadFile);
+      const result = await uploadKnowledgeFile(pendingUploadFile, knowledgeCsrfToken);
       setPendingUploadFile(null);
       setUploadPreview('');
       setUploadPreviewError('');
@@ -308,6 +423,7 @@ function App() {
         message: `${result.fileName} was added to the knowledge base.`,
       });
     } catch (uploadError) {
+      if (handleKnowledgeAuthError(uploadError)) return;
       setUploadFeedback({
         severity: 'error',
         message: uploadError instanceof Error ? uploadError.message : 'Unable to upload the knowledge file.',
@@ -352,17 +468,25 @@ function App() {
   };
 
   const handleDeleteKnowledgeFile = async (file: KnowledgeFile) => {
+    if (!knowledgeCsrfToken) {
+      setAuthError('Your knowledge management session expired. Please log in again.');
+      setAuthAuthenticated(false);
+      setKnowledgeFilesOpen(false);
+      setAuthDialogOpen(true);
+      return;
+    }
     if (!window.confirm(`Delete ${file.relativePath} from the knowledge base?`)) return;
 
     setDeletingFile(file.relativePath);
     setUploadFeedback(null);
     try {
-      await deleteKnowledgeFile(file.relativePath);
+      await deleteKnowledgeFile(file.relativePath, knowledgeCsrfToken);
       setUploadFeedback({
         severity: 'success',
         message: `${file.relativePath} was deleted from the knowledge base.`,
       });
     } catch (deleteError) {
+      if (handleKnowledgeAuthError(deleteError)) return;
       setUploadFeedback({
         severity: 'error',
         message: deleteError instanceof Error ? deleteError.message : 'Unable to delete the knowledge file.',
@@ -431,31 +555,56 @@ function App() {
               useFlexGap
               sx={{ alignItems: 'center', flexWrap: 'wrap', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, flex: { xs: '1 1 100%', sm: '0 1 auto' } }}
             >
-              <Button
-                component="label"
-                variant="outlined"
-                color="primary"
-                size="small"
-                startIcon={<CloudUploadOutlinedIcon />}
-                disabled={uploadingKnowledge || uploadPreviewLoading}
-              >
-                {uploadingKnowledge ? 'Uploading…' : 'Upload knowledge'}
-                <input
-                  hidden
-                  type="file"
-                  accept=".md,.txt,text/markdown,text/plain"
-                  onChange={(event) => void handleUploadFileSelection(event)}
-                />
-              </Button>
-              <Button
-                variant="outlined"
-                color="primary"
-                size="small"
-                startIcon={<FolderOpenOutlinedIcon />}
-                onClick={() => void handleToggleKnowledgeFiles()}
-              >
-                Knowledge files
-              </Button>
+              {authAuthenticated ? (
+                <>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    startIcon={<CloudUploadOutlinedIcon />}
+                    disabled={uploadingKnowledge || uploadPreviewLoading}
+                  >
+                    {uploadingKnowledge ? 'Uploading…' : 'Upload knowledge'}
+                    <input
+                      hidden
+                      type="file"
+                      accept=".md,.txt,text/markdown,text/plain"
+                      onChange={(event) => void handleUploadFileSelection(event)}
+                    />
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    startIcon={<FolderOpenOutlinedIcon />}
+                    onClick={() => void handleToggleKnowledgeFiles()}
+                  >
+                    Knowledge files
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    onClick={() => void handleKnowledgeLogout()}
+                  >
+                    Log out
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  disabled={authConfigured === null}
+                  onClick={() => {
+                    setAuthError('');
+                    setAuthDialogOpen(true);
+                  }}
+                >
+                  {authConfigured ? 'Log in to manage knowledge' : 'Set up knowledge access'}
+                </Button>
+              )}
               <Tooltip title="Clear visible chat (saved history remains)">
                 <span>
                   <Button
@@ -616,6 +765,95 @@ function App() {
             </Stack>
           </Box>
         </Card>
+        <Dialog
+          open={authDialogOpen}
+          onClose={() => {
+            if (!authBusy) {
+              setAuthDialogOpen(false);
+              setAuthPassword('');
+              setAuthSetupCode('');
+              setAuthError('');
+            }
+          }}
+          fullWidth
+          maxWidth="xs"
+          aria-labelledby="knowledge-auth-title"
+        >
+          <Box component="form" onSubmit={(event: FormEvent<HTMLFormElement>) => void handleKnowledgeAuthSubmit(event)}>
+            <DialogTitle id="knowledge-auth-title">
+              {authConfigured ? 'Knowledge management login' : 'Set up knowledge administrator'}
+            </DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {authConfigured
+                    ? 'Log in to upload, view, and delete knowledge files. Chat remains available without logging in.'
+                    : 'Create the single administrator account used to upload, view, and delete knowledge files. Get the first-run code from the backend terminal.'}
+                </Typography>
+                <TextField
+                  autoFocus
+                  required
+                  fullWidth
+                  label={authConfigured ? 'Username' : 'Administrator username'}
+                  value={authUsername}
+                  onChange={(event) => setAuthUsername(event.target.value)}
+                  slotProps={{ htmlInput: { minLength: 3, maxLength: 64, autoComplete: 'username' } }}
+                  disabled={authBusy}
+                />
+                {!authConfigured && (
+                  <TextField
+                    required
+                    fullWidth
+                    label="First-run setup code"
+                    value={authSetupCode}
+                    onChange={(event) => setAuthSetupCode(event.target.value)}
+                    helperText="Copy the code printed in the backend terminal."
+                    slotProps={{ htmlInput: { autoComplete: 'off' } }}
+                    disabled={authBusy}
+                  />
+                )}
+                <TextField
+                  required
+                  fullWidth
+                  label="Password"
+                  type="password"
+                  value={authPassword}
+                  onChange={(event) => setAuthPassword(event.target.value)}
+                  helperText={authConfigured ? undefined : 'Use 12–128 characters. The password is stored as a salted hash.'}
+                  slotProps={{
+                    htmlInput: {
+                      minLength: authConfigured ? undefined : 12,
+                      maxLength: 128,
+                      autoComplete: authConfigured ? 'current-password' : 'new-password',
+                    },
+                  }}
+                  disabled={authBusy}
+                />
+                {authError && <Alert severity="error">{authError}</Alert>}
+              </Stack>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button
+                onClick={() => {
+                  setAuthDialogOpen(false);
+                  setAuthPassword('');
+                  setAuthSetupCode('');
+                  setAuthError('');
+                }}
+                disabled={authBusy}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={authBusy || !authUsername.trim() || !authPassword || (!authConfigured && !authSetupCode.trim())}
+              >
+                {authBusy ? 'Please wait…' : authConfigured ? 'Log in' : 'Create admin'}
+              </Button>
+            </DialogActions>
+          </Box>
+        </Dialog>
         <Dialog
           open={knowledgeFilesOpen}
           onClose={() => setKnowledgeFilesOpen(false)}

@@ -26,10 +26,12 @@ trident-ai-assistant/
 |   |-- tsconfig.json
 |   `-- src/
 |       |-- server.ts
+|       |-- routes/auth.ts
 |       |-- routes/chat.ts
 |       |-- routes/knowledge.ts
 |       |-- retrieval/retrievalService.ts
 |       |-- services/claudeService.ts
+|       |-- services/knowledgeAuth.ts
 |       |-- storage/storage.ts
 |       `-- types.ts
 |-- frontend/
@@ -49,7 +51,8 @@ trident-ai-assistant/
 `-- storage/
     |-- queries.json
     |-- chat-history.json
-    `-- claude-prompt.txt
+    |-- claude-prompt.txt
+    `-- auth.json (created during first admin setup; ignored by Git)
 ```
 
 Other folders under `backend/src` and `frontend/src` contain supporting modules, styles, assets, and types.
@@ -59,9 +62,10 @@ Other folders under `backend/src` and `frontend/src` contain supporting modules,
 - `frontend/src/App.tsx`: Displays the chat, sends a question, and displays the returned answer.
 - `frontend/src/services/chatApi.ts`: Makes `POST /api/chat` requests.
 - `frontend/vite.config.ts`: Runs the frontend at port `5173` and proxies `/api` requests to the backend at `localhost:4000`.
-- `backend/src/server.ts`: Starts Express, enables JSON request parsing and CORS, and mounts the chat routes.
+- `backend/src/server.ts`: Starts Express, enables JSON request parsing and CORS, prints the first-run setup code when needed, and mounts the API routes.
+- `backend/src/routes/auth.ts` and `backend/src/services/knowledgeAuth.ts`: Create the first knowledge administrator, verify logins, and manage short-lived sessions.
 - `backend/src/routes/chat.ts`: Validates the request, saves the query, runs retrieval, calls Claude, records messages, and returns the API response.
-- `backend/src/routes/knowledge.ts`: Accepts Markdown and plain-text transcript uploads, lists supported knowledge files, and deletes selected files under `knowledge/`.
+- `backend/src/routes/knowledge.ts`: Requires authentication to upload, list, and delete Markdown and plain-text transcript files under `knowledge/`.
 - `backend/src/retrieval/retrievalService.ts`: Finds and ranks paragraphs from Markdown and plain-text knowledge files.
 - `backend/src/services/claudeService.ts`: Builds and saves the prompt, invokes Claude Code CLI, logs its output, parses the response, and reports CLI failures without generating a fallback answer.
 - `backend/src/storage/storage.ts`: Reads and writes query and chat-history JSON files.
@@ -119,6 +123,12 @@ PDF, DOCX, and other binary/document formats are not supported. They require for
 Click **Knowledge files** to open the file manager dialog. It lists the Markdown and text files in the knowledge base and provides a delete action for each file. Deletions require confirmation.
 
 `VIDEO_TRANSCRIPT_TEST.txt` at the project root is a sample file for manual testing. It is not searched while there: upload it through **Upload knowledge** so the app saves it under `knowledge/`.
+
+Before knowledge-file management can be used, create the single administrator account. On first startup without `storage/auth.json`, the backend prints a random first-run setup code to its terminal. In the UI, select **Set up knowledge access**, enter that code, choose a username (3–64 characters) and password (12–128 characters; minimum 12), and create the account. The setup code changes when the backend restarts until setup is complete.
+
+The backend stores the username, random salt, and scrypt-derived password hash in `storage/auth.json`; it never stores the plaintext password. This file is Git-ignored. Login creates an HTTP-only, SameSite session cookie and CSRF token. Sessions last up to eight hours and are held in memory, so restarting the backend logs out users. Five failed logins from one client address trigger a 15-minute lockout.
+
+Authentication protects knowledge-file listing, upload, and deletion. Chat and chat history remain unauthenticated. This local administrator authentication is intended for trusted networks only; it is not a replacement for production identity management, HTTPS, or a broader authorization system.
 
 ### Build Checks
 
@@ -244,11 +254,11 @@ Returns the most recent saved chat messages, up to a maximum of 100, in chronolo
 
 ### `GET /api/knowledge`
 
-Returns Markdown and plain-text file paths, sizes, and last-updated timestamps under `knowledge/`.
+Requires a knowledge administrator session. Returns Markdown and plain-text file paths, sizes, and last-updated timestamps under `knowledge/`.
 
 ### `DELETE /api/knowledge?path=<relative-path>`
 
-Deletes the specified `.md` or `.txt` file under `knowledge/`. Paths outside the knowledge directory are rejected. A missing file returns HTTP 404.
+Requires a knowledge administrator session. Deletes the specified `.md` or `.txt` file under `knowledge/`. Paths outside the knowledge directory are rejected. A missing file returns HTTP 404.
 
 ### `POST /api/knowledge/upload`
 
@@ -259,6 +269,15 @@ file: <UTF-8 Markdown (.md) or plain-text (.txt) file, maximum 5 MB>
 ```
 
 Successful uploads return HTTP 201 with `ok`, `message`, `fileName`, and `sizeBytes`. Unsupported file types or invalid text receive HTTP 400, files over the size limit receive HTTP 413, and a duplicate filename receives HTTP 409. The uploaded content is stored as-is; no format conversion or transcript parser is performed.
+
+The upload endpoint requires a knowledge administrator session and a valid CSRF token. Knowledge endpoints return HTTP 401 without a valid login session.
+
+### Knowledge administrator authentication
+
+- `GET /api/auth/status`: Returns whether the administrator account is configured and whether the current browser session is authenticated. An authenticated session also receives its CSRF token.
+- `POST /api/auth/setup`: Creates the first administrator once; requires the first-run setup code printed by the backend. Send JSON with `username`, `password`, and `setupCode`. Later setup attempts return HTTP 409.
+- `POST /api/auth/login`: Starts an administrator session using JSON `username` and `password`. Five failed attempts from one client address are locked out for 15 minutes.
+- `POST /api/auth/logout`: Ends the current administrator session.
 
 ## 10. Common Troubleshooting
 
@@ -297,10 +316,11 @@ The backend defaults to port `4000`; set `PORT` to use a different backend port.
 - Retrieval uses local lexical scoring over paragraph blocks; it is not semantic/vector search.
 - The adaptive retrieval limit is at most eight blocks per question.
 - The supported knowledge formats are UTF-8 Markdown and plain text. PDF, DOCX, and video/audio files are not parsed; video transcripts must be supplied as text.
-- Chat history is one local conversation transcript; there are not yet separate named conversations or per-chat deletion.
-- Data is stored in local JSON files; there is no database, multi-user identity, or access-control layer in the current implementation.
+- Knowledge-file management uses one local administrator account stored as a salted hash in the Git-ignored `storage/auth.json`; its sessions are in memory and end on backend restart.
+- Chat and chat history are not authenticated, and chat history is one local transcript; there are not separate named conversations or per-chat deletion.
+- Data is stored in local JSON files; there is no database or multi-user identity management.
 - Prompt snapshots and backend logs include submitted questions and retrieved source content.
-- The development servers bind to network interfaces for access from other devices. The API currently has no authentication. Use only on a trusted network and do not expose it directly to the public internet without adding authentication, authorization, and appropriate data protections.
+- The development servers bind to network interfaces for access from other devices. Knowledge-file management requires authentication, but chat and history endpoints are public. Use only on a trusted network and do not expose the app directly to the public internet without broader authentication, authorization, HTTPS, and appropriate data protections.
 - Claude Code CLI authentication and usage requirements are controlled by the installed CLI version and Anthropic account configuration.
 
 ## 12. Useful Test Questions

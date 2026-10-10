@@ -7,8 +7,10 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
+const knowledgeAuth_1 = require("../services/knowledgeAuth");
 const router = (0, express_1.Router)();
 const knowledgeDirectory = node_path_1.default.resolve(__dirname, '../../../knowledge');
+router.use(knowledgeAuth_1.requireKnowledgeAuth);
 const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: {
