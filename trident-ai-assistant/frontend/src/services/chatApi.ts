@@ -17,3 +17,33 @@ export async function sendChatQuestion(question: string): Promise<ChatResponse> 
 
   return data;
 }
+
+export interface KnowledgeUploadResponse {
+  fileName: string;
+  sizeBytes: number;
+}
+
+export async function uploadKnowledgeFile(file: File): Promise<KnowledgeUploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('/api/knowledge/upload', {
+    method: 'POST',
+    body: formData,
+  });
+  const data = (await response.json()) as {
+    ok?: boolean;
+    message?: string;
+    fileName?: string;
+    sizeBytes?: number;
+  };
+
+  if (!response.ok || data.ok !== true || !data.fileName || data.sizeBytes === undefined) {
+    throw new Error(data.message ?? 'Unable to upload the knowledge file.');
+  }
+
+  return {
+    fileName: data.fileName,
+    sizeBytes: data.sizeBytes,
+  };
+}

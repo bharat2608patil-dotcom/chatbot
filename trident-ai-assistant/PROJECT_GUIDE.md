@@ -25,6 +25,7 @@ trident-ai-assistant/
 |   `-- src/
 |       |-- server.ts
 |       |-- routes/chat.ts
+|       |-- routes/knowledge.ts
 |       |-- retrieval/retrievalService.ts
 |       |-- services/claudeService.ts
 |       |-- storage/storage.ts
@@ -57,6 +58,7 @@ Other folders under `backend/src` and `frontend/src` contain supporting modules,
 - `frontend/vite.config.ts`: Runs the frontend at port `5173` and proxies `/api` requests to the backend at `localhost:4000`.
 - `backend/src/server.ts`: Starts Express, enables JSON request parsing and CORS, and mounts the chat routes.
 - `backend/src/routes/chat.ts`: Validates the request, saves the query, runs retrieval, calls Claude, records messages, and returns the API response.
+- `backend/src/routes/knowledge.ts`: Accepts Markdown uploads, validates and saves them under `knowledge/` without overwriting an existing file.
 - `backend/src/retrieval/retrievalService.ts`: Finds and ranks paragraphs from Markdown knowledge files.
 - `backend/src/services/claudeService.ts`: Builds and saves the prompt, invokes Claude Code CLI, logs its output, parses the response, and provides a local fallback when the CLI fails.
 - `backend/src/storage/storage.ts`: Reads and writes query and chat-history JSON files.
@@ -104,6 +106,12 @@ npm run dev
 ```
 
 Open `http://localhost:5173` in a browser. Keep both terminal processes running while using the app.
+
+### Upload a Knowledge File
+
+Use **Upload .md** in the chat header and select a UTF-8 Markdown (`.md`) file. The backend accepts one file at a time, with a maximum size of 5 MB. It sanitizes the stored filename and returns a conflict response if a file with that name already exists; rename the upload to add it under another name. Uploaded Markdown is saved directly under `knowledge/` and is eligible for retrieval on the next question.
+
+Uploads of other formats are intentionally not supported yet. Add format-specific text extraction in a later parser step before allowing those extensions.
 
 ### Build Checks
 
@@ -221,6 +229,16 @@ Successful response fields:
 - `timestamp`: Response timestamp.
 
 An empty question returns HTTP 400. An unexpected server error returns HTTP 500 with a message.
+
+### `POST /api/knowledge/upload`
+
+Send a multipart form-data request with one file field named `file`:
+
+```text
+file: <UTF-8 Markdown file, maximum 5 MB>
+```
+
+Successful uploads return HTTP 201 with `ok`, `message`, `fileName`, and `sizeBytes`. Unsupported file types or invalid Markdown receive HTTP 400, files over the size limit receive HTTP 413, and a duplicate filename receives HTTP 409. The original upload is stored as Markdown; no document parser or format conversion is performed yet.
 
 ## 10. Common Troubleshooting
 

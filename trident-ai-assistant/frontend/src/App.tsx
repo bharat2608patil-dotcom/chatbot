@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -16,7 +16,8 @@ import {
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
-import { sendChatQuestion } from './services/chatApi';
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import { sendChatQuestion, uploadKnowledgeFile } from './services/chatApi';
 import type { ChatMessage, ChatResponse } from './types/chat';
 
 const theme = createTheme({
@@ -46,6 +47,11 @@ function App() {
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [uploadingKnowledge, setUploadingKnowledge] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<{
+    severity: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -96,6 +102,31 @@ function App() {
     }
   };
 
+  const handleKnowledgeUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    setUploadingKnowledge(true);
+    setUploadFeedback(null);
+    try {
+      const result = await uploadKnowledgeFile(file);
+      setUploadFeedback({
+        severity: 'success',
+        message: `${result.fileName} was added to the knowledge base.`,
+      });
+    } catch (uploadError) {
+      setUploadFeedback({
+        severity: 'error',
+        message: uploadError instanceof Error ? uploadError.message : 'Unable to upload the knowledge file.',
+      });
+    } finally {
+      setUploadingKnowledge(false);
+    }
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -137,7 +168,25 @@ function App() {
                 Trident AI Assistant
               </Typography>
             </Stack>
-            <Chip label="RAG-enabled" color="primary" variant="outlined" />
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Button
+                component="label"
+                variant="outlined"
+                color="primary"
+                size="small"
+                startIcon={<CloudUploadOutlinedIcon />}
+                disabled={uploadingKnowledge}
+              >
+                {uploadingKnowledge ? 'Uploading…' : 'Upload .md'}
+                <input
+                  hidden
+                  type="file"
+                  accept=".md,text/markdown"
+                  onChange={(event) => void handleKnowledgeUpload(event)}
+                />
+              </Button>
+              <Chip label="RAG-enabled" color="primary" variant="outlined" />
+            </Stack>
           </Box>
 
           <Box
@@ -150,6 +199,11 @@ function App() {
             }}
           >
             <Stack spacing={2}>
+              {uploadFeedback && (
+                <Alert severity={uploadFeedback.severity} onClose={() => setUploadFeedback(null)}>
+                  {uploadFeedback.message}
+                </Alert>
+              )}
               {messages.map((message) => (
                 <Box
                   key={message.id}
