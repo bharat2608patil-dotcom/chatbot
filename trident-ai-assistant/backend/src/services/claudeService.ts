@@ -7,6 +7,23 @@ function isWindows(): boolean {
   return process.platform === 'win32';
 }
 
+function stripMarkdownFormatting(value: string): string {
+  return value
+    .replace(/^(?:#+|\*\*|__|\s)+/, '')
+    .replace(/(?:\*\*|__|~~|`)/g, '')
+    .replace(/^(?:\d+\.|[-*])\s+/gm, '')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function cleanSectionValue(value: string): string {
+  return stripMarkdownFormatting(value)
+    .replace(/^[:\-\s]+/, '')
+    .replace(/\s+\*\*$/g, '')
+    .trim();
+}
+
 export function buildClaudePrompt(context: string, question: string): string {
   const template = `You are Trident AI Assistant.
 
@@ -17,6 +34,7 @@ Rules:
 4. Do not invent procedures.
 5. If answer is unavailable, say: "I could not find this information in the available knowledge sources."
 6. Do not greet the user or say you are ready to help. Start directly with the requested answer format.
+7. Output plain text only. Do not use Markdown headings like ##, bold like **text**, or bullet markers. Use only the required numbered sections.
 
 CONTEXT:
 ${context}
@@ -35,28 +53,35 @@ Provide:
 
 export function parseClaudeResponse(raw: string, references: string[] = []): ClaudeResponse {
   const normalized = raw.trim();
+  const sectionPattern = /(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?\s*(?:\d+\.\s*)?(Answer|Possible Root Cause|Recommended Actions|Reference Sources)(?:\*\*)?\s*[:\-]?\s*([\s\S]*?)(?=\n\s*(?:#+\s*)?(?:\*\*)?\s*(?:\d+\.\s*)?(?:Answer|Possible Root Cause|Recommended Actions|Reference Sources)(?:\*\*)?\s*[:\-]?|$)/gi;
 
-  const answerMatch = normalized.match(/(?:^|\n)1\.\s*Answer\s*[:\-]?\s*([\s\S]*?)(?=\n\s*2\.\s*Possible Root Cause|\n\s*2\.\s*Possible Root Cause:|$)/i);
-  const rootCauseMatch = normalized.match(/(?:^|\n)2\.\s*Possible Root Cause\s*[:\-]?\s*([\s\S]*?)(?=\n\s*3\.\s*Recommended Actions|\n\s*3\.\s*Recommended Actions:|$)/i);
-  const actionsMatch = normalized.match(/(?:^|\n)3\.\s*Recommended Actions\s*[:\-]?\s*([\s\S]*?)(?=\n\s*4\.\s*Reference Sources|\n\s*4\.\s*Reference Sources:|$)/i);
-  const referencesMatch = normalized.match(/(?:^|\n)4\.\s*Reference Sources\s*[:\-]?\s*([\s\S]*?)$/i);
+  const sections = new Map<string, string>();
+  let match: RegExpExecArray | null;
 
-  const answer = (answerMatch?.[1] ?? normalized).replace(/\n{3,}/g, '\n\n').trim() || 'I could not find this information in the available knowledge sources.';
-  const rootCause = (rootCauseMatch?.[1] ?? 'The issue cannot be confidently established from the current context.').replace(/\n{3,}/g, '\n\n').trim();
-  const recommendedActions = (actionsMatch?.[1] ?? 'Review the relevant knowledge sources and validate the impacted configuration.')
+  while ((match = sectionPattern.exec(normalized)) !== null) {
+    const key = match[1].trim().toLowerCase();
+    const value = (match[2] ?? '').trim();
+    sections.set(key, value);
+  }
+
+  const answer = cleanSectionValue(sections.get('answer') ?? normalized);
+  const rootCause = cleanSectionValue(
+    sections.get('possible root cause') ?? 'The issue cannot be confidently established from the current context.'
+  );
+  const recommendedActions = (cleanSectionValue(sections.get('recommended actions') ?? 'Review the relevant knowledge sources and validate the impacted configuration.'))
     .split(/\n|;\s*/)
     .map((value) => value.replace(/^[\-\*\d\.\s]+/, '').trim())
     .filter(Boolean)
     .slice(0, 5);
 
-  const extractedReferences = (referencesMatch?.[1] ?? references.join(', '))
+  const extractedReferences = (cleanSectionValue(sections.get('reference sources') ?? references.join(', ')))
     .split(/\n|,\s*/)
     .map((value) => value.replace(/^[-*\s]+/, '').trim())
     .filter(Boolean)
     .slice(0, 10);
 
   return {
-    answer,
+    answer: answer || 'I could not find this information in the available knowledge sources.',
     rootCause,
     recommendedActions,
     references: extractedReferences.length > 0 ? extractedReferences : references,
