@@ -62,7 +62,7 @@ function parseClaudeResponse(raw, references = []) {
         const value = (match[2] ?? '').trim();
         sections.set(key, value);
     }
-    const answer = cleanSectionValue(sections.get('answer') ?? normalized);
+    const answerText = cleanSectionValue(sections.get('answer') ?? normalized);
     const rootCause = cleanSectionValue(sections.get('possible root cause') ?? 'The issue cannot be confidently established from the current context.');
     const recommendedActions = (cleanSectionValue(sections.get('recommended actions') ?? 'Review the relevant knowledge sources and validate the impacted configuration.'))
         .split(/\n|;\s*/)
@@ -74,8 +74,21 @@ function parseClaudeResponse(raw, references = []) {
         .map((value) => value.replace(/^[-*\s]+/, '').trim())
         .filter(Boolean)
         .slice(0, 10);
+    const formattedAnswer = [
+        'Answer',
+        answerText || 'I could not find this information in the available knowledge sources.',
+        '',
+        'Possible Root Cause',
+        rootCause,
+        '',
+        'Recommended Actions',
+        ...recommendedActions.map((item, index) => `${index + 1}. ${item}`),
+        '',
+        'Reference Sources',
+        ...extractedReferences.map((item) => `- ${item}`),
+    ].join('\n');
     return {
-        answer: answer || 'I could not find this information in the available knowledge sources.',
+        answer: formattedAnswer,
         rootCause,
         recommendedActions,
         references: extractedReferences.length > 0 ? extractedReferences : references,
