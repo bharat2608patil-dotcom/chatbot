@@ -67,7 +67,7 @@ router.get('/api/knowledge', async (_request, response) => {
     details.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
     response.json({ files: details });
   } catch (error) {
-    console.error('[knowledge] failed to list Markdown files:', error);
+    console.error('[knowledge] failed to list knowledge files:', error);
     response.status(500).json({ ok: false, message: 'Knowledge files could not be listed.' });
   }
 });
