@@ -6,9 +6,12 @@ import {
   Card,
   CardContent,
   Chip,
-  Collapse,
   CssBaseline,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Stack,
   TextField,
@@ -290,49 +293,6 @@ function App() {
             }}
           >
             <Stack spacing={2}>
-              <Collapse in={knowledgeFilesOpen}>
-                <Card sx={{ bgcolor: '#12212d', boxShadow: 'none' }}>
-                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Knowledge files ({knowledgeFiles.length})
-                    </Typography>
-                    {knowledgeFiles.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">No Markdown files found.</Typography>
-                    ) : (
-                      <Stack divider={<Divider flexItem />} spacing={0}>
-                        {knowledgeFiles.map((file) => (
-                          <Box
-                            key={file.relativePath}
-                            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.5 }}
-                          >
-                            <Box sx={{ minWidth: 0 }}>
-                              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                                {file.relativePath}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {Math.ceil(file.sizeBytes / 1024)} KB · Updated {new Date(file.updatedAt).toLocaleDateString()}
-                              </Typography>
-                            </Box>
-                            <Tooltip title="Delete knowledge file">
-                              <span>
-                                <IconButton
-                                  aria-label={`Delete ${file.relativePath}`}
-                                  color="error"
-                                  size="small"
-                                  disabled={Boolean(deletingFile)}
-                                  onClick={() => void handleDeleteKnowledgeFile(file)}
-                                >
-                                  <DeleteOutlinedIcon fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          </Box>
-                        ))}
-                      </Stack>
-                    )}
-                  </CardContent>
-                </Card>
-              </Collapse>
               {uploadFeedback && (
                 <Alert severity={uploadFeedback.severity} onClose={() => setUploadFeedback(null)}>
                   {uploadFeedback.message}
@@ -425,6 +385,57 @@ function App() {
             </Stack>
           </Box>
         </Card>
+        <Dialog
+          open={knowledgeFilesOpen}
+          onClose={() => setKnowledgeFilesOpen(false)}
+          fullWidth
+          maxWidth="sm"
+          aria-labelledby="knowledge-files-title"
+          PaperProps={{ sx: { bgcolor: 'background.paper', backgroundImage: 'none' } }}
+        >
+          <DialogTitle id="knowledge-files-title">
+            Knowledge files ({knowledgeFiles.length})
+          </DialogTitle>
+          <DialogContent dividers>
+            {knowledgeFiles.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">No Markdown files found.</Typography>
+            ) : (
+              <Stack divider={<Divider flexItem />} spacing={0}>
+                {knowledgeFiles.map((file) => (
+                  <Box
+                    key={file.relativePath}
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 1 }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                        {file.relativePath}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {Math.ceil(file.sizeBytes / 1024)} KB · Updated {new Date(file.updatedAt).toLocaleDateString()}
+                      </Typography>
+                    </Box>
+                    <Tooltip title="Delete knowledge file">
+                      <span>
+                        <IconButton
+                          aria-label={`Delete ${file.relativePath}`}
+                          color="error"
+                          size="small"
+                          disabled={Boolean(deletingFile)}
+                          onClick={() => void handleDeleteKnowledgeFile(file)}
+                        >
+                          <DeleteOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setKnowledgeFilesOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </ThemeProvider>
   );
