@@ -24,4 +24,5 @@ export interface KnowledgeFile {
   relativePath: string;
   sizeBytes: number;
   updatedAt: string;
+  fileType: 'md' | 'txt';
 }

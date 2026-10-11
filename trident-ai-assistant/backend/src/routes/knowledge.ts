@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Router, type RequestHandler } from 'express';
 import multer from 'multer';
+import { requireKnowledgeAuth } from '../services/knowledgeAuth';
 
 const router = Router();
 const knowledgeDirectory = path.resolve(__dirname, '../../../knowledge');
@@ -52,7 +53,7 @@ const parseUpload: RequestHandler = (request, response, next) => {
   });
 };
 
-router.get('/api/knowledge', async (_request, response) => {
+router.get('/api/knowledge', requireKnowledgeAuth, async (_request, response) => {
   try {
     await fs.mkdir(knowledgeDirectory, { recursive: true });
     const files = await collectKnowledgeFiles(knowledgeDirectory);
@@ -62,6 +63,7 @@ router.get('/api/knowledge', async (_request, response) => {
         relativePath: file.relativePath,
         sizeBytes: stat.size,
         updatedAt: stat.mtime.toISOString(),
+        fileType: path.extname(file.relativePath).slice(1).toLowerCase(),
       };
     }));
     details.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
@@ -72,7 +74,7 @@ router.get('/api/knowledge', async (_request, response) => {
   }
 });
 
-router.delete('/api/knowledge', async (request, response) => {
+router.delete('/api/knowledge', requireKnowledgeAuth, async (request, response) => {
   const requestedPath = typeof request.query.path === 'string' ? request.query.path : '';
   if (!requestedPath || !['.md', '.txt'].includes(path.extname(requestedPath).toLowerCase())) {
     response.status(400).json({ ok: false, message: 'Provide a Markdown or transcript text file path to delete.' });
@@ -115,7 +117,7 @@ router.delete('/api/knowledge', async (request, response) => {
   }
 });
 
-router.post('/api/knowledge/upload', parseUpload, async (request, response) => {
+router.post('/api/knowledge/upload', requireKnowledgeAuth, parseUpload, async (request, response) => {
   const file = request.file;
   if (!file) {
     response.status(400).json({ ok: false, message: 'Choose a Markdown or plain-text transcript file to upload.' });

@@ -51,3 +51,8 @@ export async function getChatHistory(limit = 100): Promise<ChatMessage[]> {
   const history = await readJson<ChatMessage[]>(HISTORY_FILE, []);
   return history.slice(-limit);
 }
+
+export async function clearChatHistory(): Promise<void> {
+  await ensureFile(HISTORY_FILE, '[]');
+  await fs.writeFile(HISTORY_FILE, '[]', 'utf8');
+}

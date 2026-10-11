@@ -28,6 +28,7 @@ trident-ai-assistant/
 |       |-- routes/knowledge.ts
 |       |-- retrieval/retrievalService.ts
 |       |-- services/claudeService.ts
+|       |-- services/knowledgeAuth.ts
 |       |-- storage/storage.ts
 |       `-- types.ts
 |-- frontend/
@@ -58,7 +59,8 @@ Other folders under `backend/src` and `frontend/src` contain supporting modules,
 - `frontend/vite.config.ts`: Runs the frontend at port `5173` and proxies `/api` requests to the backend at `localhost:4000`.
 - `backend/src/server.ts`: Starts Express, enables JSON request parsing and CORS, and mounts the chat routes.
 - `backend/src/routes/chat.ts`: Validates the request, saves the query, runs retrieval, calls Claude, records messages, and returns the API response.
-- `backend/src/routes/knowledge.ts`: Accepts Markdown uploads, validates and saves them under `knowledge/` without overwriting an existing file.
+- `backend/src/routes/knowledge.ts`: Lists, uploads, and deletes supported knowledge files without overwriting an existing file; these operations require a knowledge administrator session.
+- `backend/src/services/knowledgeAuth.ts`: Creates the first knowledge administrator and handles login, logout, password hashing, and knowledge-management sessions.
 - `backend/src/retrieval/retrievalService.ts`: Finds and ranks paragraphs from Markdown knowledge files.
 - `backend/src/services/claudeService.ts`: Builds and saves the prompt, invokes Claude Code CLI, logs its output, parses the response, and provides a local fallback when the CLI fails.
 - `backend/src/storage/storage.ts`: Reads and writes query and chat-history JSON files.
@@ -109,9 +111,7 @@ Open `http://localhost:5173` in a browser. Keep both terminal processes running 
 
 ### Upload a Knowledge File
 
-Use **Upload .md** in the chat header and select a UTF-8 Markdown (`.md`) file. The backend accepts one file at a time, with a maximum size of 5 MB. It sanitizes the stored filename and returns a conflict response if a file with that name already exists; rename the upload to add it under another name. Uploaded Markdown is saved directly under `knowledge/` and is eligible for retrieval on the next question.
-
-Uploads of other formats are intentionally not supported yet. Add format-specific text extraction in a later parser step before allowing those extensions.
+Sign in to knowledge management (or create its administrator account on first use), select **Upload knowledge**, review the UTF-8 text preview, and confirm. The backend accepts Markdown (`.md`) and plain text (`.txt`) files up to 5 MB. It sanitizes the stored filename and returns a conflict response if a file with that name already exists; rename the upload to add it under another name. Uploaded files are saved under `knowledge/` and are eligible for retrieval on the next question.
 
 ### Build Checks
 
@@ -201,6 +201,7 @@ Logs and `claude-prompt.txt` contain user questions and retrieved knowledge text
 - `storage/queries.json`: Array of submitted questions and timestamps.
 - `storage/chat-history.json`: Array of user and assistant messages, timestamps, and references.
 - `storage/claude-prompt.txt`: The latest full prompt. It is overwritten on the next request.
+- `storage/knowledge-auth.json`: Knowledge administrator username, random salt, and `scrypt` password hash. Plaintext passwords are not stored; this file is ignored by Git.
 
 These files are local JSON/text storage, not a database. On startup, the chat screen loads the most recent 100 persisted messages; if there is no saved history, it displays the welcome message.
 
@@ -236,21 +237,36 @@ Returns the most recent saved chat messages, up to a maximum of 100, in chronolo
 
 ### `GET /api/knowledge`
 
-Returns Markdown file paths, sizes, and last-updated timestamps under `knowledge/`.
+Requires a signed-in knowledge administrator. Returns supported file paths, file types, sizes, and last-updated timestamps under `knowledge/`.
 
 ### `DELETE /api/knowledge?path=<relative-path>`
 
-Deletes the specified Markdown file under `knowledge/`. Paths outside the knowledge directory are rejected. A missing file returns HTTP 404.
+Requires a signed-in knowledge administrator. Deletes the specified Markdown or plain-text file under `knowledge/`. Paths outside the knowledge directory are rejected. A missing file returns HTTP 404.
 
 ### `POST /api/knowledge/upload`
+
+Requires a signed-in knowledge administrator.
 
 Send a multipart form-data request with one file field named `file`:
 
 ```text
-file: <UTF-8 Markdown file, maximum 5 MB>
+file: <UTF-8 Markdown or plain-text file, maximum 5 MB>
 ```
 
-Successful uploads return HTTP 201 with `ok`, `message`, `fileName`, and `sizeBytes`. Unsupported file types or invalid Markdown receive HTTP 400, files over the size limit receive HTTP 413, and a duplicate filename receives HTTP 409. The original upload is stored as Markdown; no document parser or format conversion is performed yet.
+Successful uploads return HTTP 201 with `ok`, `message`, `fileName`, and `sizeBytes`. Unsupported file types or unreadable text receive HTTP 400, files over the size limit receive HTTP 413, and a duplicate filename receives HTTP 409.
+
+### Knowledge administrator authentication
+
+- `GET /api/knowledge/auth/status` reports whether an administrator is configured and whether the current browser session is signed in.
+- `POST /api/knowledge/auth/setup` creates the first administrator with a username and 12–128 character password.
+- `POST /api/knowledge/auth/login` starts an administrator session.
+- `POST /api/knowledge/auth/logout` ends the current session.
+
+The backend stores a random salt and `scrypt` password hash in `storage/knowledge-auth.json`, never the plaintext password. Login sets an HTTP-only, SameSite=Strict cookie scoped to knowledge routes. Sessions expire after eight hours or when the backend restarts. Authentication applies only to listing, uploading, and deleting knowledge files; chat, chat history, and health endpoints remain unauthenticated.
+
+### `DELETE /api/chat/history`
+
+Clears the saved chat transcript. It does not delete submitted-question records or knowledge files.
 
 ## 10. Common Troubleshooting
 

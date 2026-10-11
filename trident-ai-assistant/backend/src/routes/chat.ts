@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { appendChatMessage, appendQuery, getChatHistory } from '../storage/storage';
+import { appendChatMessage, appendQuery, clearChatHistory, getChatHistory } from '../storage/storage';
 import { retrieveRelevantChunks } from '../retrieval/retrievalService';
 import { callClaude } from '../services/claudeService';
 import type { ChatRequest, ChatResponse } from '../types';
@@ -20,6 +20,16 @@ router.get('/api/chat/history', async (req, res) => {
   } catch (error) {
     console.error('[chat] failed to load chat history:', error);
     res.status(500).json({ ok: false, message: 'Chat history could not be loaded.' });
+  }
+});
+
+router.delete('/api/chat/history', async (_request, response) => {
+  try {
+    await clearChatHistory();
+    response.json({ ok: true });
+  } catch (error) {
+    console.error('[chat] failed to clear chat history:', error);
+    response.status(500).json({ ok: false, message: 'Chat history could not be cleared.' });
   }
 });
 
